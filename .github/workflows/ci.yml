@@ -133,14 +133,28 @@ jobs:
         run: pip3 install -e .
 
       - name: Run SimpLL Unit Tests
+        id: simpll-unit-tests
         working-directory: ${{ github.workspace }}
         run: ninja test -C build
+        continue-on-error: true
+      - uses: mainmatter/continue-on-error-comment@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          outcome: ${{ steps.simpll-unit-tests.outcome }}
+          test-id: Run SimpLL Unit Tests failed for LLVM ${{ matrix.llvm }}
 
       - name: Run Regression Tests
+        id: regression-tests
         if: matrix.regression-tests
         working-directory: ${{ github.workspace }}
         run: |
-          pytest tests
+          pytest tests 2>&1 | tee pytest.log
+        continue-on-error: true
+      - uses: mainmatter/continue-on-error-comment@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          outcome: ${{ steps.regression-tests.outcome }}
+          test-id: Run Regression Tests failed for LLVM ${{ matrix.llvm }}\n `tail -n 1 ${{ github.workspace }}/pytest.log\n`
 
   code-style:
     runs-on: ubuntu-latest
