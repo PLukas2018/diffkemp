@@ -41,8 +41,8 @@ RUN apt-get update && \
       libssl-dev \
       libz3-dev \
       flex \
-      gcc-7 \
-      g++-7 \
+      gcc-9 \
+      g++-9 \
       gdb \
       git \
       gperf \
@@ -73,7 +73,7 @@ RUN apt-get update && \
       z3
 # Remove conflicting automatically installed GCC versions
 RUN apt-get remove -y cpp gcc g++ && \
-# Install alternatives for all LLVM versions and for GCC 7
+# Install alternatives for all LLVM versions and for GCC 9
     update-alternatives --install /usr/local/bin/llvm-config llvm-config /usr/bin/llvm-config-9 40 && \
     update-alternatives --install /usr/local/bin/clang clang /usr/bin/clang-9 40 && \
     update-alternatives --install /usr/local/bin/opt opt /usr/bin/opt-9 40 && \
@@ -106,9 +106,9 @@ RUN apt-get remove -y cpp gcc g++ && \
     update-alternatives --install /usr/local/bin/clang clang /usr/bin/clang-16 80 && \
     update-alternatives --install /usr/local/bin/opt opt /usr/bin/opt-16 80 && \
     update-alternatives --install /usr/local/bin/llvm-link llvm-link /usr/bin/llvm-link-16 80 && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 100 --slave /usr/bin/g++ g++ /usr/bin/g++-7 && \
-    update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-7 100 \
-                        --slave   /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-7
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 100 --slave /usr/bin/g++ g++ /usr/bin/g++-9 && \
+    update-alternatives --install /usr/bin/x86_64-linux-gnu-gcc x86_64-linux-gnu-gcc /usr/bin/x86_64-linux-gnu-gcc-9 100 \
+                        --slave   /usr/bin/x86_64-linux-gnu-g++ x86_64-linux-gnu-g++ /usr/bin/x86_64-linux-gnu-g++-9
 # Configure links for the clang-format checker script
 RUN update-alternatives --install /usr/local/bin/clang-format clang-format /usr/bin/clang-format-8 40 && \
     ln -s /diffkemp/tools/check-clang-format.sh /usr/local/bin/check-clang-format
@@ -118,8 +118,6 @@ RUN curl https://bootstrap.pypa.io/get-pip.py | python3.8
 RUN python3 -m pip install \
       --upgrade pip \
       llvmcpy \
-      pytest \
-      pyyaml \
       --ignore-installed
 RUN git clone https://github.com/viktormalik/rhel-kernel-get.git && \
     python3 -m pip install -r rhel-kernel-get/requirements.txt
