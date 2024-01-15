@@ -13,7 +13,8 @@ import yaml
 
 
 class MacroDefinitions:
-    """Class for extracting information about macro definitions."""
+    """Class for extracting information about macro definitions.
+    Extracts also definitions for macro-function/function-macro diffs."""
     def __init__(self, snapshot_dir_old, snapshot_dir_new, result):
         self.old_dir = snapshot_dir_old
         self.new_dir = snapshot_dir_new
@@ -92,9 +93,15 @@ class MacroDefinitions:
         base_dir = self.old_dir if version == "old" else self.new_dir
         file = os.path.join(base_dir, macro_def["file"])
         line = macro_def["line"]
+        version_kind = kind
+        # Note: kind can be macro-function, function-macro.
+        if kind in ["macro-function", "function-macro"]:
+            version_kind = kind.split("-")
+            version_kind = version_kind[0] if version == "old" \
+                else version_kind[1]
         definition = {
             "kind": kind,
-            version: create_def_info(line, file, base_dir, kind)
+            version: create_def_info(line, file, base_dir, version_kind)
         }
         if name not in self.definitions:
             self.definitions[name] = definition

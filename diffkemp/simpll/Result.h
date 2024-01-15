@@ -128,8 +128,7 @@ struct SyntaxDifference : public NonFunctionDifference {
     /// The difference.
     std::string BodyL, BodyR;
     // Information about definitions of differing 'object'.
-    // For now it is only used in macro differences, for other differences it is
-    // null.
+    // For inline-assembly differences it is not used (it is null).
     std::unique_ptr<CodeLocation> diffDefL, diffDefR;
     SyntaxDifference()
             : NonFunctionDifference(SynDiff), syntaxKind(Kind::UNKNOWN){};

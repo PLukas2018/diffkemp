@@ -225,9 +225,9 @@ class ComparisonGraph:
             but the line where the definition of the caller starts.
         :param body: A tuple containing the body of the 'object' for both
             modules.
-        :param diff_def: Tuple (first, second), for macro difference contains
-            information about definition (name, file, line) of the differing
-            macros, otherwise contains None.
+        :param diff_def: Tuple (first, second), contains information about
+            definition (name, file, line) of the differing 'object',
+            for `assembly` is None.
         """
         def __init__(self, kind, name, parent_fun, callstack, body,
                      diff_def=None):
