@@ -182,6 +182,7 @@ function SingleCall({
   }
   return (
     <Calls
+      bothSides
       oldCalls={[{ name: oldName }]}
       newCalls={[{ name: newName }]}
       onSelect={onSelect}
@@ -199,17 +200,19 @@ SingleCall.propTypes = {
 
 /**
  * Component for visualisation of multiple calls from call stack
- * which does not belong together.
+ * which typically does not belong together.
  * @param {Object} props
  * @param {Object[]} props.oldCalls - Calls from old call stack.
  * @param {Object[]} props.newCalls - Calls from new call stack.
  * @param {Object} props.selectedFunction - Function which is selected and should
  *   be highlighted in the call stack.
  * @param {Function} props.onSelect - Callback function accepting a selected function.
+ * @param [bothSides] - Set if calls belong together (eg. case of macro-function differences
+ *   when we want to highlight/select the macro and the function at the same time).
  * @returns
  */
 function Calls({
-  oldCalls, newCalls, selectedFunction, onSelect,
+  oldCalls, newCalls, selectedFunction, onSelect, bothSides,
 }) {
   return (
     <ListGroup horizontal as="ul" className="callstack-call-group">
@@ -221,7 +224,7 @@ function Calls({
             name={call.name}
             onSelect={onSelect}
             selectedFunction={selectedFunction}
-            side={CallSide.OLD}
+            side={bothSides ? CallSide.BOTH : CallSide.OLD}
           />
         ))}
       </ListGroup>
@@ -233,7 +236,7 @@ function Calls({
             name={call.name}
             onSelect={onSelect}
             selectedFunction={selectedFunction}
-            side={CallSide.NEW}
+            side={bothSides ? CallSide.BOTH : CallSide.NEW}
           />
         ))}
       </ListGroup>
@@ -242,6 +245,7 @@ function Calls({
 }
 
 Calls.propTypes = {
+  bothSides: PropTypes.bool,
   oldCalls: CallstackPropTypes.isRequired,
   newCalls: CallstackPropTypes,
   selectedFunction: SelectedFunPropType,
@@ -266,6 +270,11 @@ function Call({
 }) {
   // putting information about type/macro under the name of function
   const nameWrap = name.replace(' ', '<br/>');
+  // Note: Currently checking if the function should be active only based on the name
+  // (kind is omitted). This solves special cases of function-macro/macro-function differences
+  // when we want to show their code at the same time.
+  // If there will be other situations when we want to show code of functions with different
+  // names simultaneously, then this needs to be reworked.
   return (
     <ListGroup.Item
       as="li"
@@ -273,7 +282,8 @@ function Call({
       action
       className="callstack-call"
       onClick={() => onSelect({ name, side })}
-      active={name === selectedFunction?.name && side === selectedFunction?.side}
+      active={name.split(' ')[0] === selectedFunction?.name.split(' ')[0]
+        && side === selectedFunction?.side}
       dangerouslySetInnerHTML={{ __html: nameWrap }}
     />
   );
