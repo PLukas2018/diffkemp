@@ -14,8 +14,20 @@ env:
     4.18.0-240.el8
     3.10
     4.11
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
+  rate-limit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: rate analysis
+        run: |
+          echo RATE LIMIT START >> $GITHUB_STEP_SUMMARY
+          gh api rate_limit >> $GITHUB_STEP_SUMMARY
+          sleep 2100
+          echo RATE LIMIT END >> $GITHUB_STEP_SUMMARY
+          gh api rate_limit >> $GITHUB_STEP_SUMMARY
+
   cache-kernels:
     runs-on: ubuntu-latest
     steps:
