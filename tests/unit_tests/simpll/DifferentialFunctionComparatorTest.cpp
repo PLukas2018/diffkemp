@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "DifferentialFunctionComparatorTest.h"
+#include "DFCLlvmIrTest.h"
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 
@@ -275,55 +276,29 @@ int DifferentialFunctionComparatorTest::testFunctionComparison(Function *FunL,
 
 /// Tests a comparison of two GEPs of a structure type with indices compared by
 /// value.
-TEST_F(DifferentialFunctionComparatorTest, CmpGepsSimple) {
-    // Create structure types to test the GEPs.
-    StructType *STyL =
-            StructType::create({Type::getInt8Ty(CtxL), Type::getInt16Ty(CtxL)});
-    STyL->setName("struct");
-    StructType *STyR =
-            StructType::create({Type::getInt8Ty(CtxR), Type::getInt16Ty(CtxR)});
-    STyR->setName("struct");
+TEST_F(DFCLlvmIrTest, CmpGepsSimple) {
+    auto left = R"(
+        %struct.s = type { i8, i16 }
+        define void @f() {
+            %var = alloca %struct.s
+            %gep1 = getelementptr %struct.s, %struct.s* %var, i32 0, i32 0
+            %gep2 = getelementptr %struct.s, %struct.s* %var, i32 0, i32 0
+            ret void
+        }
+    )";
+    auto right = R"(
+        %struct.s = type { i8, i16 }
+        define void @f() {
+            %var = alloca %struct.s
+            %gep1 = getelementptr %struct.s, %struct.s* %var, i32 0, i32 0
+            %gep2 = getelementptr %struct.s, %struct.s* %var, i32 0, i32 1
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    AllocaInst *VarL = new AllocaInst(STyL, 0, "var", BBL);
-    AllocaInst *VarR = new AllocaInst(STyR, 0, "var", BBR);
-    GetElementPtrInst *GEP1L = GetElementPtrInst::Create(
-            STyL,
-            VarL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 0)},
-            "",
-            BBL);
-    GetElementPtrInst *GEP1R = GetElementPtrInst::Create(
-            STyR,
-            VarR,
-            {ConstantInt::get(Type::getInt32Ty(CtxR), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxR), 0)},
-            "",
-            BBR);
-    GetElementPtrInst *GEP2L = GetElementPtrInst::Create(
-            STyL,
-            VarL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 0)},
-            "",
-            BBL);
-    GetElementPtrInst *GEP2R = GetElementPtrInst::Create(
-            STyR,
-            VarR,
-            {ConstantInt::get(Type::getInt32Ty(CtxR), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxR), 1)},
-            "",
-            BBR);
-
-    ASSERT_EQ(DiffComp->testCmpGEPs(dyn_cast<GEPOperator>(GEP1L),
-                                    dyn_cast<GEPOperator>(GEP1R)),
-              0);
-    ASSERT_EQ(DiffComp->testCmpGEPs(dyn_cast<GEPOperator>(GEP2L),
-                                    dyn_cast<GEPOperator>(GEP2R)),
-              1);
+    ASSERT_EQ(testCmpGEPs("gep1"), 0);
+    ASSERT_EQ(testCmpGEPs("gep2"), 1);
 }
 
 /// Tests a comparison of two GEPs of a structure type with a constant index
@@ -403,31 +378,23 @@ TEST_F(DifferentialFunctionComparatorTest, CmpGepsRenamed) {
 
 /// Tests a comparison of two GEPs of different array types that don't go into
 /// its elements (therefore the type difference should be ignored).
-TEST_F(DifferentialFunctionComparatorTest, CmpGepsArray) {
-    // Create structure types to test the GEPs.
-    ArrayType *ATyL = ArrayType::get(Type::getInt8Ty(CtxL), 2);
-    ArrayType *ATyR = ArrayType::get(Type::getInt16Ty(CtxR), 3);
+TEST_F(DFCLlvmIrTest, CmpGepsArray) {
+    auto left = R"(define void @f() {
+        %var = alloca [2 x i8]
+        %gep1 = getelementptr [2 x i8], [2 x i8]* %var, i32 0
+        %gep2 = getelementptr [2 x i8], [2 x i8]* %var, i32 0
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        %var = alloca [3 x i16]
+        %gep1 = getelementptr [3 x i16], [3 x i16]* %var, i32 0
+        %gep2 = getelementptr [3 x i16], [3 x i16]* %var, i32 1
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
 
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    AllocaInst *VarL = new AllocaInst(ATyL, 0, "var", BBL);
-    AllocaInst *VarR = new AllocaInst(ATyR, 0, "var", BBR);
-    GetElementPtrInst *GEP1L = GetElementPtrInst::Create(
-            ATyL, VarL, {ConstantInt::get(Type::getInt32Ty(CtxL), 0)}, "", BBL);
-    GetElementPtrInst *GEP1R = GetElementPtrInst::Create(
-            ATyR, VarR, {ConstantInt::get(Type::getInt32Ty(CtxR), 0)}, "", BBR);
-    GetElementPtrInst *GEP2L = GetElementPtrInst::Create(
-            ATyL, VarL, {ConstantInt::get(Type::getInt32Ty(CtxL), 0)}, "", BBL);
-    GetElementPtrInst *GEP2R = GetElementPtrInst::Create(
-            ATyR, VarR, {ConstantInt::get(Type::getInt32Ty(CtxR), 1)}, "", BBR);
-
-    ASSERT_EQ(DiffComp->testCmpGEPs(dyn_cast<GEPOperator>(GEP1L),
-                                    dyn_cast<GEPOperator>(GEP1R)),
-              0);
-    ASSERT_EQ(DiffComp->testCmpGEPs(dyn_cast<GEPOperator>(GEP2L),
-                                    dyn_cast<GEPOperator>(GEP2R)),
-              -1);
+    ASSERT_EQ(testCmpGEPs("gep1"), 0);
+    ASSERT_EQ(testCmpGEPs("gep2"), -1);
 }
 
 /// Tests attribute comparison (currently attributes are always ignored).
@@ -438,89 +405,68 @@ TEST_F(DifferentialFunctionComparatorTest, CmpAttrs) {
 
 /// Tests specific comparison of intermediate comparison operations in cases
 /// when the signedness differs when ignoring type casts.
-TEST_F(DifferentialFunctionComparatorTest, CmpOperationsICmp) {
+TEST_F(DFCLlvmIrTest, CmpOperationsICmp) {
     bool needToCmpOperands;
+    auto left = R"(
+        @gv = dso_local global i8 6
+        define void @f() {
+            %1 = load i8, i8* @gv
+            %icmp = icmp ugt i8 %1, %1
+            ret void
+        }
+    )";
+    auto right = R"(
+        @gv = dso_local global i8 6
+        define void @f() {
+            %1 = load i8, i8* @gv
+            %icmp = icmp sgt i8 %1, %1
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
-    // Create two global variables and comparison instructions using them.
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    GlobalVariable *GVL =
-            new GlobalVariable(*ModL,
-                               Type::getInt8Ty(CtxL),
-                               true,
-                               GlobalValue::ExternalLinkage,
-                               ConstantInt::get(Type::getInt32Ty(CtxL), 6));
-    GlobalVariable *GVR =
-            new GlobalVariable(*ModR,
-                               Type::getInt8Ty(CtxR),
-                               true,
-                               GlobalValue::ExternalLinkage,
-                               ConstantInt::get(Type::getInt32Ty(CtxR), 6));
-
-    ICmpInst *ICmpL =
-            new ICmpInst(*BBL, CmpInst::Predicate::ICMP_UGT, GVL, GVL);
-    ICmpInst *ICmpR =
-            new ICmpInst(*BBR, CmpInst::Predicate::ICMP_SGT, GVR, GVR);
-
-    ASSERT_EQ(DiffComp->testCmpOperations(ICmpL, ICmpR, needToCmpOperands), -1);
+    ASSERT_EQ(testCmpOperations("icmp", needToCmpOperands), -1);
     Conf.Patterns.TypeCasts = true;
-    ASSERT_EQ(DiffComp->testCmpOperations(ICmpL, ICmpR, needToCmpOperands), 0);
-
-    ICmpL->eraseFromParent();
-    ICmpR->eraseFromParent();
+    ASSERT_EQ(testCmpOperations("icmp", needToCmpOperands), 0);
 }
 
 // Tests that an inverse icmp instruction is only considered inverse when
 // the types match.
-TEST_F(DifferentialFunctionComparatorTest, CmpOperationsWithOpDiffTypes) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    auto ConstL = ConstantInt::get(Type::getInt32Ty(CtxL), 2);
-    auto AddL = BinaryOperator::Create(
-            BinaryOperator::Add, ConstL, ConstL, "", BBL);
-    auto CondL = ICmpInst::Create(llvm::Instruction::ICmp,
-                                  llvm::CmpInst::ICMP_EQ,
-                                  AddL,
-                                  AddL,
-                                  "",
-                                  BBL);
-
-    auto ConstR = ConstantInt::get(Type::getInt64Ty(CtxR), 2);
-    auto AddR = BinaryOperator::Create(
-            BinaryOperator::Add, ConstR, ConstR, "", BBR);
-    auto CondR = ICmpInst::Create(llvm::Instruction::ICmp,
-                                  llvm::CmpInst::ICMP_NE,
-                                  AddR,
-                                  AddR,
-                                  "",
-                                  BBR);
-
-    ASSERT_NE(DiffComp->testCmpOperationsWithOperands(CondL, CondR), 0);
+TEST_F(DFCLlvmIrTest, CmpOperationsWithOpDiffTypes) {
+    auto left = R"(define void @f() {
+        %1 = add i32 2, 2
+        %cond = icmp eq i32 %1, %1
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        %1 = add i64 2, 2
+        %cond = icmp ne i64 %1, %1
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
+    ASSERT_NE(testCmpOperationsWithOperands("cond"), 0);
 }
 
 /// Tests specific comparison of allocas of a structure type whose layout
 /// changed.
-TEST_F(DifferentialFunctionComparatorTest, CmpOperationsAllocas) {
+TEST_F(DFCLlvmIrTest, CmpOperationsAllocas) {
     bool needToCmpOperands;
-
-    // Create two structure types and allocas using them.
-    StructType *STyL =
-            StructType::create({Type::getInt8Ty(CtxL), Type::getInt8Ty(CtxL)});
-    STyL->setName("struct.test");
-    StructType *STyR = StructType::create({Type::getInt8Ty(CtxR),
-                                           Type::getInt8Ty(CtxR),
-                                           Type::getInt8Ty(CtxR)});
-    STyR->setName("struct.test");
-
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    AllocaInst *AllL = new AllocaInst(STyL, 0, "var", BBL);
-    AllocaInst *AllR = new AllocaInst(STyR, 0, "var", BBR);
-
-    ASSERT_EQ(DiffComp->testCmpOperations(AllL, AllR, needToCmpOperands), 0);
+    auto left = R"(
+        %struct.s = type { i8, i8 }
+        define void @f() {
+            %var = alloca %struct.s
+            ret void
+        }
+    )";
+    auto right = R"(
+        %struct.s = type { i8, i8, i8 }
+        define void @f() {
+            %var = alloca %struct.s
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
+    ASSERT_EQ(testCmpOperations("var", needToCmpOperands), 0);
 }
 
 /// Tests the comparison of calls to allocation functions.
@@ -799,56 +745,48 @@ TEST_F(DifferentialFunctionComparatorTest, CmpMemsets) {
 }
 
 /// Tests comparing calls with an extra argument.
-TEST_F(DifferentialFunctionComparatorTest, CmpCallsWithExtraArg) {
-    // Create auxilliary functions to serve as the called functions.
-    Function *AuxFL = Function::Create(
-            FunctionType::get(Type::getVoidTy(CtxL),
-                              {Type::getInt32Ty(CtxL), Type::getInt32Ty(CtxL)},
-                              false),
-            GlobalValue::ExternalLinkage,
-            "AuxFL",
-            ModL.get());
-    Function *AuxFR = Function::Create(
-            FunctionType::get(
-                    Type::getVoidTy(CtxR), {Type::getInt32Ty(CtxR)}, false),
-            GlobalValue::ExternalLinkage,
-            "AuxFR",
-            ModR.get());
+TEST_F(DFCLlvmIrTest, CmpCallsWithExtraArgLeft) {
+    auto left = R"(
+        declare i32 @aux(i32, i32) ; function with extra argument
+        define void @f() {
+            %call1 = call i32 @aux(i32 5, i32 6) ; additional param is not zero
+            %call2 = call i32 @aux(i32 5, i32 0) ; additional param is zero
+            ret void
+        }
+    )";
+    auto right = R"(
+        declare i32 @aux(i32)
+        define void @f() {
+            %call1 = call i32 @aux(i32 5)
+            %call2 = call i32 @aux(i32 5)
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
+    ASSERT_EQ(testCmpCallsWithExtraArg("call1"), 1);
+    ASSERT_EQ(testCmpCallsWithExtraArg("call2"), 0);
+}
 
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    // First compare calls where the additional parameter is not zero.
-    CallInst *CL =
-            CallInst::Create(AuxFL->getFunctionType(),
-                             AuxFL,
-                             {ConstantInt::get(Type::getInt32Ty(CtxL), 5),
-                              ConstantInt::get(Type::getInt32Ty(CtxL), 6)},
-                             "",
-                             BBL);
-    CallInst *CR =
-            CallInst::Create(AuxFR->getFunctionType(),
-                             AuxFR,
-                             {ConstantInt::get(Type::getInt32Ty(CtxR), 5)},
-                             "",
-                             BBR);
-    ASSERT_EQ(DiffComp->testCmpCallsWithExtraArg(CL, CR), 1);
-    ASSERT_EQ(DiffComp->testCmpCallsWithExtraArg(CR, CL), 1);
-
-    // Then compare calls when the additional parameter is zero.
-    CL = CallInst::Create(AuxFL->getFunctionType(),
-                          AuxFL,
-                          {ConstantInt::get(Type::getInt32Ty(CtxL), 5),
-                           ConstantInt::get(Type::getInt32Ty(CtxL), 0)},
-                          "",
-                          BBL);
-    CR = CallInst::Create(AuxFR->getFunctionType(),
-                          AuxFR,
-                          {ConstantInt::get(Type::getInt32Ty(CtxR), 5)},
-                          "",
-                          BBR);
-    ASSERT_EQ(DiffComp->testCmpCallsWithExtraArg(CL, CR), 0);
-    ASSERT_EQ(DiffComp->testCmpCallsWithExtraArg(CR, CL), 0);
+TEST_F(DFCLlvmIrTest, CmpCallsWithExtraArgRight) {
+    auto left = R"(
+        declare i32 @aux(i32)
+        define void @f() {
+            %call1 = call i32 @aux(i32 5)
+            %call2 = call i32 @aux(i32 5)
+            ret void
+        }
+    )";
+    auto right = R"(
+        declare i32 @aux(i32, i32) ; function with extra argument
+        define void @f() {
+            %call1 = call i32 @aux(i32 5, i32 6) ; additional param is not zero
+            %call2 = call i32 @aux(i32 5, i32 0) ; additional param is zero
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
+    ASSERT_EQ(testCmpCallsWithExtraArg("call1"), 1);
+    ASSERT_EQ(testCmpCallsWithExtraArg("call2"), 0);
 }
 
 /// Tests several cases where cmpTypes should detect a semantic equivalence.
@@ -895,86 +833,96 @@ TEST_F(DifferentialFunctionComparatorTest, CmpTypes) {
 
 /// Tests whether calls are properly marked for inlining while comparing
 /// basic blocks.
-TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksInlining) {
-    // Create the basic blocks with terminator instructions (to make sure that
-    // after skipping the alloca created below, the end of the block is not
-    // encountered).
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    auto *RetL = ReturnInst::Create(CtxL, BBL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-    auto *RetR = ReturnInst::Create(CtxR, BBR);
+TEST_F(DFCLlvmIrTest, CmpBasicBlocksInliningLeft) {
+    auto left = R"(
+        declare void @aux(i32)
+        define void @f(){
+            call void @aux(i32 0)
+            ret void
+        }
+    )";
+    auto right = R"(
+        declare void @aux(i32)
+        define void @f(){
+            %var = alloca i8
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
-    // Create auxilliary functions to inline.
-    Function *AuxFL = Function::Create(
-            FunctionType::get(
-                    Type::getVoidTy(CtxL), {Type::getInt32Ty(CtxR)}, false),
-            GlobalValue::ExternalLinkage,
-            "AuxFL",
-            ModL.get());
-    Function *AuxFR = Function::Create(
-            FunctionType::get(
-                    Type::getVoidTy(CtxR), {Type::getInt32Ty(CtxR)}, false),
-            GlobalValue::ExternalLinkage,
-            "AuxFR",
-            ModR.get());
+    testCmpEntryBasicBlocks();
+    // Aux function in left module should be marked for inlining.
+    auto tryInline = ModComp->tryInline;
+    ASSERT_EQ(tryInline.first->getCalledFunction()->getName(), "aux");
+    ASSERT_EQ(tryInline.second, nullptr);
+}
 
-    // Test inlining on the left.
-    CallInst *CL = CallInst::Create(AuxFL->getFunctionType(), AuxFL, "", RetL);
-    AllocaInst *AllR = new AllocaInst(Type::getInt8Ty(CtxR), 0, "var", RetR);
+TEST_F(DFCLlvmIrTest, CmpBasicBlocksInliningRight) {
+    auto left = R"(
+        declare void @aux(i32)
+        define void @f(){
+            %var = alloca i8
+            ret void
+        }
+    )";
+    auto right = R"(
+        declare void @aux(i32)
+        define void @f(){
+            call void @aux(i32 0)
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
-    DiffComp->testCmpBasicBlocks(BBL, BBR);
-    std::pair<const CallInst *, const CallInst *> expectedPair{CL, nullptr};
-    ASSERT_EQ(ModComp->tryInline, expectedPair);
+    testCmpEntryBasicBlocks();
+    // Aux function in right module should be marked for inlining.
+    auto tryInline = ModComp->tryInline;
+    ASSERT_EQ(tryInline.first, nullptr);
+    ASSERT_EQ(tryInline.second->getCalledFunction()->getName(), "aux");
+}
 
-    CL->eraseFromParent();
-    AllR->eraseFromParent();
+TEST_F(DFCLlvmIrTest, CmpBasicBlocksInliningBoth) {
+    auto left = R"(
+        declare void @aux(i32)
+        define void @f(){
+            call void @aux(i32 5)
+            ret void
+        }
+    )";
+    auto right = R"(
+        declare void @aux(i32)
+        define void @f(){
+            call void @aux(i32 6)
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
-    // Test inlining on the right.
-    ModComp->tryInline = {nullptr, nullptr};
-    AllocaInst *AllL = new AllocaInst(Type::getInt8Ty(CtxL), 0, "var", RetL);
-    CallInst *CR = CallInst::Create(AuxFR->getFunctionType(), AuxFR, "", RetR);
-
-    DiffComp->testCmpBasicBlocks(BBL, BBR);
-    expectedPair = {nullptr, CR};
-    ASSERT_EQ(ModComp->tryInline, expectedPair);
-
-    AllL->eraseFromParent();
-    CR->eraseFromParent();
-
-    // Test inlining on both sides.
-    CL = CallInst::Create(AuxFL->getFunctionType(),
-                          AuxFL,
-                          {ConstantInt::get(Type::getInt32Ty(CtxL), 5)},
-                          "",
-                          RetL);
-    CR = CallInst::Create(AuxFR->getFunctionType(),
-                          AuxFR,
-                          {ConstantInt::get(Type::getInt32Ty(CtxR), 6)},
-                          "",
-                          RetR);
-    ReturnInst::Create(CtxL, BBL);
-    ReturnInst::Create(CtxR, BBR);
-
-    DiffComp->testCmpBasicBlocks(BBL, BBR);
-    expectedPair = {CL, CR};
-    ASSERT_EQ(ModComp->tryInline, expectedPair);
+    testCmpEntryBasicBlocks();
+    // Aux function in both modules should be marked for inlining.
+    auto tryInline = ModComp->tryInline;
+    ASSERT_EQ(tryInline.first->getCalledFunction()->getName(), "aux");
+    ASSERT_EQ(tryInline.second->getCalledFunction()->getName(), "aux");
 }
 
 /// Tests ignoring of instructions that don't cause a semantic difference in
 /// cmpBasicBlocks.
 /// Note: the functioning of mayIgnore is tested in the test for cmpValues.
-TEST_F(DifferentialFunctionComparatorTest, CmpBasicBlocksIgnore) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    new AllocaInst(Type::getInt8Ty(CtxL), 0, "var", BBL);
-    new AllocaInst(Type::getInt8Ty(CtxR), 0, "var1", BBR);
-    new AllocaInst(Type::getInt8Ty(CtxR), 0, "var2", BBR);
-    ReturnInst::Create(CtxL, BBL);
-    ReturnInst::Create(CtxR, BBR);
-
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBR, BBL), 0);
+TEST_F(DFCLlvmIrTest, CmpBasicBlocksIgnore) {
+    auto left = R"(define void @f() {
+        %var = alloca i8
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        %var1 = alloca i8
+        %var2 = alloca i8
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
+    ASSERT_EQ(testCmpEntryBasicBlocks(), 0);
+    // Swapped functions
+    CREATE_FROM_LLVM(right, left);
+    ASSERT_EQ(testCmpEntryBasicBlocks(), 0);
 }
 
 /// Tests the comparison of constant global variables using cmpGlobalValues.
@@ -1087,31 +1035,40 @@ TEST_F(DifferentialFunctionComparatorTest, CmpGlobalValuesMissingDefs) {
 }
 
 /// Tests ignoring of pointer casts using cmpBasicBlocks and cmpValues.
-TEST_F(DifferentialFunctionComparatorTest, CmpValuesPointerCasts) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    IntToPtrInst *PtrL =
-            new IntToPtrInst(ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-                             PointerType::get(Type::getInt8Ty(CtxL), 0),
-                             "",
-                             BBL);
-    IntToPtrInst *PtrR =
-            new IntToPtrInst(ConstantInt::get(Type::getInt32Ty(CtxR), 0),
-                             PointerType::get(Type::getInt8Ty(CtxR), 0),
-                             "",
-                             BBR);
-    CastInst *CastL = new BitCastInst(
-            PtrL, PointerType::get(Type::getInt32Ty(CtxL), 0), "", BBL);
-
-    ReturnInst::Create(CtxL, CastL, BBL);
-    ReturnInst::Create(CtxR, PtrR, BBR);
+TEST_F(DFCLlvmIrTest, CmpValuesPointerCastsLeft) {
+    auto left = R"(define void @f() {
+        %ptr = inttoptr i32 0 to i8*
+        %cast = bitcast i8* %ptr to i32*
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        %ptr = inttoptr i32 0 to i8*
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
 
     // First, cmpBasicBlocks must be run to identify instructions to ignore
     // and then, cmpValues should ignore those instructions.
-    DiffComp->testCmpBasicBlocks(BBL, BBR);
-    ASSERT_EQ(DiffComp->testCmpValues(PtrL, PtrR, true), 0);
-    ASSERT_EQ(DiffComp->testCmpValues(CastL, PtrR, true), 0);
+    testCmpEntryBasicBlocks();
+    ASSERT_EQ(testCmpInstValues("cast", "ptr", true), 0);
+}
+
+TEST_F(DFCLlvmIrTest, CmpValuesPointerCastsRight) {
+    auto left = R"(define void @f() {
+        %ptr = inttoptr i32 0 to i8*
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        %ptr = inttoptr i32 0 to i8*
+        %cast = bitcast i8* %ptr to i32*
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
+
+    // First, cmpBasicBlocks must be run to identify instructions to ignore
+    // and then, cmpValues should ignore those instructions.
+    testCmpEntryBasicBlocks();
+    ASSERT_EQ(testCmpInstValues("ptr", "cast", true), 0);
 }
 
 /// Test ignoring of a cast from a union type using cmpBasicBlocks and
@@ -1243,214 +1200,141 @@ TEST_F(DifferentialFunctionComparatorTest, CmpConstants) {
 }
 
 /// Tests comparison of field access operations with the same offset.
-TEST_F(DifferentialFunctionComparatorTest, CmpFieldAccessSameOffset) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    // Create two structure types, one with an added union. Then create two
-    // other structure types with the original ones being their second field.
-    auto StrL = StructType::create(
-            {Type::getInt8Ty(CtxL), Type::getInt8Ty(CtxL)}, "struct.test");
-    auto Union = StructType::create({Type::getInt8Ty(CtxR)}, "union.test");
-    auto StrR =
-            StructType::create({Type::getInt8Ty(CtxR), Union}, "struct.test");
-    auto StrL2 =
-            StructType::create({Type::getInt8Ty(CtxL), StrL}, "struct.test2");
-    auto StrR2 =
-            StructType::create({Type::getInt8Ty(CtxR), StrR}, "struct.test2");
-
-    // Create allocas of struct.test2 and a series of GEPs that first get the
-    // second field of struct.test2 (of type struct.test1), then the second
-    // field of struct.test1 (which is an union the second function).
-    // In the second function a bitcast is created to cast the union back to
-    // the inner type.
-    auto AllocaL = new AllocaInst(StrL2, 0, "", BBL);
-    auto AllocaR = new AllocaInst(StrR2, 0, "", BBR);
-
-    auto GEPL = GetElementPtrInst::Create(
-            StrL2,
-            AllocaL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBL);
-    auto GEPR = GetElementPtrInst::Create(
-            StrR2,
-            AllocaR,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBR);
-    auto GEPL2 = GetElementPtrInst::Create(
-            StrL,
-            GEPL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBL);
-    auto GEPR2 = GetElementPtrInst::Create(
-            StrR,
-            GEPR,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBR);
-    auto CastR = CastInst::Create(Instruction::CastOps::BitCast,
-                                  GEPR2,
-                                  PointerType::get(Type::getInt8Ty(CtxR), 0),
-                                  "",
-                                  BBR);
-
-    auto RetL = ReturnInst::Create(CtxL, BBL);
-    auto RetR = ReturnInst::Create(CtxR, BBR);
+TEST_F(DFCLlvmIrTest, CmpFieldAccessSameOffset) {
+    auto left = R"(
+        %struct.s2 = type { i8, %struct.s }
+        %struct.s = type { i8, i8 }
+        define void @f() {
+            %1 = alloca %struct.s2
+            ; getting the second field of struct.s
+            %2 = getelementptr inbounds %struct.s2, %struct.s2* %1, i32 0, i32 1
+            %3 = getelementptr inbounds %struct.s, %struct.s* %2, i32 0, i32 1
+            ret void
+        }
+    )";
+    auto right = R"(
+        %struct.s2 = type { i8, %struct.s }
+        %struct.s = type { i8, %union.u } ; <- changed to union
+        %union.u = type { i8 }
+        define void @f() {
+            %1 = alloca %struct.s2
+            ; getting the second field of struct.s (it is union here)
+            %2 = getelementptr inbounds %struct.s2, %struct.s2* %1, i32 0, i32 1
+            %3 = getelementptr inbounds %struct.s, %struct.s* %2, i32 0, i32 1
+            %4 = bitcast %union.u* %3 to i8* ; cast union back to inner type
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
     // Check if the field accesses are compared correctly and the instruction
     // iterators are at the correct place.
-    BasicBlock::const_iterator InstL = BBL->begin();
+    BasicBlock::const_iterator InstL = FL->getEntryBlock().begin();
     InstL++;
-    BasicBlock::const_iterator InstR = BBR->begin();
+    BasicBlock::const_iterator InstR = FR->getEntryBlock().begin();
     InstR++;
 
     ASSERT_EQ(DiffComp->testCmpFieldAccess(InstL, InstR), 0);
     // The iterators should point to the instructions following the field access
-    // operations if they are equal.
-    ASSERT_EQ(&*InstL, RetL);
-    ASSERT_EQ(&*InstR, RetR);
+    // operations if they are equal (which is the terminator of the basic
+    // block).
+    ASSERT_EQ(&*InstL, FL->getEntryBlock().getTerminator());
+    ASSERT_EQ(&*InstR, FR->getEntryBlock().getTerminator());
 }
 
 /// Tests comparison of field access operations with a different offset.
-TEST_F(DifferentialFunctionComparatorTest, CmpFieldAccessDifferentOffset) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    // Create two structure types, one with an added union.
-    auto StrL = StructType::create(
-            {Type::getInt8Ty(CtxL), Type::getInt8Ty(CtxL)}, "struct.test");
-    auto Union = StructType::create({Type::getInt8Ty(CtxR)}, "union.test");
-    auto StrR =
-            StructType::create({Type::getInt8Ty(CtxR), Union}, "struct.test");
-
-    // Create allocas of struct.test, then a series of GEPs where in the first
-    // function the first field of struct.test is accessed and in the second one
-    // the second field is accessed, followed by a bitcast from the union type.
-    auto AllocaL = new AllocaInst(StrL, 0, "", BBL);
-    auto AllocaR = new AllocaInst(StrR, 0, "", BBR);
-
-    auto GEPL = GetElementPtrInst::Create(
-            StrL,
-            AllocaL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 0)},
-            "",
-            BBL);
-    auto GEPR = GetElementPtrInst::Create(
-            StrR,
-            AllocaR,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBR);
-    auto CastR = CastInst::Create(Instruction::CastOps::BitCast,
-                                  GEPR,
-                                  PointerType::get(Type::getInt8Ty(CtxR), 0),
-                                  "",
-                                  BBR);
-
-    auto RetL = ReturnInst::Create(CtxL, BBL);
-    auto RetR = ReturnInst::Create(CtxR, BBR);
+TEST_F(DFCLlvmIrTest, CmpFieldAccessDifferentOffset) {
+    auto left = R"(
+        %struct.s = type { i8, i8 }
+        define void @f() {
+            %alloca = alloca %struct.s
+            ; first field is accessed
+            %gep = getelementptr %struct.s, %struct.s* %alloca, i32 0, i32 0
+            ret void
+        }
+    )";
+    auto right = R"(
+        %struct.s = type { i8, %union.u }
+        %union.u = type { i8 }
+        define void @f() {
+            %alloca = alloca %struct.s
+            ; second field is accessed
+            %gep = getelementptr %struct.s, %struct.s* %alloca, i32 0, i32 1
+            %cast = bitcast %union.u* %gep to i8* ;
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
     // Check if the field accesses are compared correctly and the instruction
     // iterators are at the correct place.
-    BasicBlock::const_iterator InstL = BBL->begin();
+    BasicBlock::const_iterator InstL = FL->getEntryBlock().begin();
     InstL++;
-    BasicBlock::const_iterator InstR = BBR->begin();
+    BasicBlock::const_iterator InstR = FR->getEntryBlock().begin();
     InstR++;
 
     ASSERT_EQ(DiffComp->testCmpFieldAccess(InstL, InstR), 1);
     // The iterators should point to the beginning of the field access
     // operations if they are not equal.
-    ASSERT_EQ(&*InstL, GEPL);
-    ASSERT_EQ(&*InstR, GEPR);
+    ASSERT_EQ(&*InstL, getInstByName(*FL, "gep"));
+    ASSERT_EQ(&*InstR, getInstByName(*FR, "gep"));
 }
 
 /// Tests comparison of field access operations where one ends with a bitcast
 /// of a different value than the previous instruction.
-TEST_F(DifferentialFunctionComparatorTest, CmpFieldAccessBrokenChain) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+TEST_F(DFCLlvmIrTest, CmpFieldAccessBrokenChain) {
+    auto left = R"(
+        %struct.s = type { i8, i8 }
+        define void @f() {
+            %alloca = alloca %struct.s
+            %gep = getelementptr %struct.s, %struct.s* %alloca, i32 0, i32 1
+            ret void
+        }
+    )";
+    auto right = R"(
+        %struct.s = type { i8, %union.u }
+        %union.u = type { i8 }
+        define void @f() {
+            %alloca = alloca %struct.s
+            %gep = getelementptr %struct.s, %struct.s* %alloca, i32 0, i32 1
 
-    // Create two structure types, one with an added union.
-    auto StrL = StructType::create(
-            {Type::getInt8Ty(CtxL), Type::getInt8Ty(CtxL)}, "struct.test");
-    auto Union = StructType::create({Type::getInt8Ty(CtxR)}, "union.test");
-    auto StrR =
-            StructType::create({Type::getInt8Ty(CtxR), Union}, "struct.test");
-
-    // Create allocas of struct.test, then a series of GEPs where in both
-    // function the second field is accessed, in the second one followed by
-    // a bitcast of the alloca (not of the GEP, used to break the field access
-    // operation).
-    auto AllocaL = new AllocaInst(StrL, 0, "", BBL);
-    auto AllocaR = new AllocaInst(StrR, 0, "", BBR);
-
-    auto GEPL = GetElementPtrInst::Create(
-            StrL,
-            AllocaL,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBL);
-    auto GEPR = GetElementPtrInst::Create(
-            StrR,
-            AllocaR,
-            {ConstantInt::get(Type::getInt32Ty(CtxL), 0),
-             ConstantInt::get(Type::getInt32Ty(CtxL), 1)},
-            "",
-            BBR);
-    auto CastR = CastInst::Create(Instruction::CastOps::BitCast,
-                                  AllocaR,
-                                  PointerType::get(Type::getInt8Ty(CtxR), 0),
-                                  "",
-                                  BBR);
-
-    auto RetL = ReturnInst::Create(CtxL, BBL);
-    auto RetR = ReturnInst::Create(CtxR, BBR);
+            ; bitcast of the alloca (not of the gep)
+            ; used to break the field access operation
+            %cast = bitcast %struct.s* %alloca to i8*
+            ret void
+        }
+    )";
+    CREATE_FROM_LLVM(left, right);
 
     // Check if the field accesses are compared correctly and the instruction
     // iterators are at the correct place.
-    BasicBlock::const_iterator InstL = BBL->begin();
+    BasicBlock::const_iterator InstL = FL->getEntryBlock().begin();
     InstL++;
-    BasicBlock::const_iterator InstR = BBR->begin();
+    BasicBlock::const_iterator InstR = FR->getEntryBlock().begin();
     InstR++;
 
     ASSERT_EQ(DiffComp->testCmpFieldAccess(InstL, InstR), 0);
     // The iterators should point to the end of the field access operations
     // (i.e. to the return instruction in the left function and to the cast
     // in the other one).
-    ASSERT_EQ(&*InstL, RetL);
-    ASSERT_EQ(&*InstR, CastR);
+    ASSERT_EQ(&*InstL, FL->getEntryBlock().getTerminator());
+    ASSERT_EQ(&*InstR, getInstByName(*FR, "cast"));
 }
 
 /// Check that skipping a bitcast instruction doesn't break sizes of
 /// synchronisation maps.
-TEST_F(DifferentialFunctionComparatorTest, CmpSkippedBitcast) {
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
+TEST_F(DFCLlvmIrTest, CmpSkippedBitcast) {
+    auto left = R"(define void @f() {
+        %1 = alloca i32
+        %2 = bitcast i32* %1 to i8*
+        ret void
+    })";
+    auto right = R"(define void @f() {
+        ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
 
-    auto AllocaL = new AllocaInst(Type::getInt32Ty(CtxL), 0, "", BBL);
-
-    auto CastL = CastInst::Create(Instruction::CastOps::BitCast,
-                                  AllocaL,
-                                  PointerType::get(Type::getInt8Ty(CtxL), 0),
-                                  "",
-                                  BBL);
-
-    auto RetL = ReturnInst::Create(
-            CtxL, ConstantInt::get(Type::getInt32Ty(CtxL), 0), BBL);
-    auto RetR = ReturnInst::Create(
-            CtxR, ConstantInt::get(Type::getInt32Ty(CtxR), 0), BBR);
-
-    ASSERT_EQ(DiffComp->testCmpBasicBlocks(BBL, BBR), 0);
+    ASSERT_EQ(testCmpEntryBasicBlocks(), 0);
     ASSERT_EQ(DiffComp->getLeftSnMapSize(), DiffComp->getRightSnMapSize());
 }
 
@@ -1506,132 +1390,66 @@ TEST_F(DifferentialFunctionComparatorTest, GetCSourceIdentifierType) {
     ASSERT_EQ(ResType, DIPtrType);
 }
 
-TEST_F(DifferentialFunctionComparatorTest, CmpPHIs) {
-    // Define incoming values and blocks
-    BasicBlock *BBL1 = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBL2 = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR1 = BasicBlock::Create(CtxR, "", FR);
-    BasicBlock *BBR2 = BasicBlock::Create(CtxR, "", FR);
-    Constant *ConstL1 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
-    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 1);
-    Constant *ConstR1 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
-    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
+TEST_F(DFCLlvmIrTest, CmpPHIs) {
+    auto left = R"(define void @f() {
+            br i1 true, label %1, label %2
+        1:
+            br label %3
+        2:
+            br label %3
+        3:
+            %phi1 = phi i8 [ 0, %1 ], [ 1, %2 ]
+            %phi2 = phi i8 [ 0, %1 ], [ 1, %2 ]
+            %phi3 = phi i8 [ 0, %1 ], [ 1, %2 ]
+            ret void
+    })";
+    auto right = R"(define void @f() {
+            br i1 true, label %1, label %2
+        1:
+            br label %3
+        2:
+            br label %3
+        3:
+            %phi1 = phi i8 [ 0, %1 ], [ 1, %2 ]  ; same order (eq)
+            %phi2 = phi i8 [ 1, %2 ], [ 0, %1 ]  ; different order (eq)
+            %phi3 = phi i8 [ 1, %2 ], [ 1, %2 ]  ; not matching (neq)
+            ret void
+    })";
+    CREATE_FROM_LLVM(left, right);
 
-    // Match the blocks and values in the serial number maps
-    DiffComp->testCmpValues(BBL1, BBR1);
-    DiffComp->testCmpValues(BBL2, BBR2);
-    DiffComp->testCmpValues(ConstL1, ConstR1);
-    DiffComp->testCmpValues(ConstL2, ConstR2);
-
-    // PHI nodes to compare
-    PHINode *PHIL = PHINode::Create(Type::getInt8Ty(CtxL), 2, "", BBL1);
-    PHINode *PHIR = PHINode::Create(Type::getInt8Ty(CtxR), 2, "", BBR1);
-
-    // Lists elements in the same order
-    PHIL->addIncoming(ConstL1, BBL1);
-    PHIL->addIncoming(ConstL2, BBL2);
-    PHIR->addIncoming(ConstR1, BBR1);
-    PHIR->addIncoming(ConstR2, BBR2);
-    ASSERT_EQ(DiffComp->testCmpPHIs(PHIL, PHIR, true), 0);
-
-    // Lists elements in different order
-    PHIR->removeIncomingValue(BBR1);
-    PHIR->addIncoming(ConstR1, BBR1);
-    ASSERT_EQ(DiffComp->testCmpPHIs(PHIL, PHIR, true), 0);
-
-    // List elements do not match
-    PHIR->removeIncomingValue(BBR1);
-    PHIR->addIncoming(ConstR2, BBR2);
-    ASSERT_EQ(DiffComp->testCmpPHIs(PHIL, PHIR, true), 1);
+    ASSERT_EQ(testCmpPHIs("phi1"), 0); // same order (eq)
+    ASSERT_EQ(testCmpPHIs("phi2"), 0); // different order (eq)
+    ASSERT_EQ(testCmpPHIs("phi3"), 1); // not matching (neq)
 }
 
-TEST_F(DifferentialFunctionComparatorTest, CustomPatternSkippingInstruction) {
-    // Test custom pattern matching and skipping of instructions therein.
-    //
-    // ; Old side of the pattern:
-    // define i8 @diffkemp.old.pattern() {
-    //     %1 = sub i8 0, 1
-    //     ret %1
-    // }
-    //
-    // ; New side of the pattern:
-    // define i8 @diffkemp.new.pattern() {
-    //     %1 = sub i8 1, 0
-    //     %2 = sdiv i8 %1, %1
-    //     ret %3
-    // }
-    //
-    // ; Old compared function:
-    // define i8 @old.function() {
-    //     %1 = sub i8 0, 1        ; matched
-    //     call void @old.function ; skipped
-    //     ret %1
-    // }
-    //
-    // ; New compared function:
-    // define i8 @new.function() {
-    //     %1 = sub i8 1, 0        ; matched
-    //     call void @new.function ; skipped
-    //     %3 = sdiv i8 %1, %1     ; matched
-    //     ret %3
-    // }
-
-    // Initialize a module that will define the pattern
+TEST_F(DFCLlvmIrTest, CustomPatternSkippingInstruction) {
+    // Creating custom pattern
     LLVMContext PatCtx;
-    auto PatMod = std::make_unique<Module>("PatternMod", PatCtx);
+    auto pattern = R"(
+        define i8 @diffkemp.old.pattern() {
+            %1 = sub i8 0, 1
+            ret i8 %1
+        }
+        define i8 @diffkemp.new.pattern() {
+            %1 = sub i8 1, 0
+            %2 = sdiv i8 %1, %1
+            ret i8 %2
+        }
+    )";
+    auto PatMod = stringToModule(pattern, PatCtx);
 
-    auto PatFL = Function::Create(
-            FunctionType::get(Type::getInt8Ty(PatCtx), {}, false),
-            GlobalValue::ExternalLinkage,
-            "diffkemp.old.pattern",
-            PatMod.get());
-    auto PatFR = Function::Create(
-            FunctionType::get(Type::getInt8Ty(PatCtx), {}, false),
-            GlobalValue::ExternalLinkage,
-            "diffkemp.new.pattern",
-            PatMod.get());
-
-    BasicBlock *PatBBL = BasicBlock::Create(PatCtx, "", PatFL);
-    BasicBlock *PatBBR = BasicBlock::Create(PatCtx, "", PatFR);
-
-    Constant *PatConstL1 = ConstantInt::get(Type::getInt8Ty(PatCtx), 0);
-    Constant *PatConstL2 = ConstantInt::get(Type::getInt8Ty(PatCtx), 1);
-    Constant *PatConstR1 = ConstantInt::get(Type::getInt8Ty(PatCtx), 0);
-    Constant *PatConstR2 = ConstantInt::get(Type::getInt8Ty(PatCtx), 1);
-
-    auto PatSubL = BinaryOperator::Create(
-            BinaryOperator::Sub, PatConstL1, PatConstL2, "", PatBBL);
-    auto PatSubR = BinaryOperator::Create(
-            BinaryOperator::Sub, PatConstR2, PatConstR1, "", PatBBR);
-
-    auto PatDivR = BinaryOperator::Create(
-            BinaryOperator::SDiv, PatSubR, PatSubR, "", PatBBR);
-
-    ReturnInst::Create(PatCtx, PatSubL, PatBBL);
-    ReturnInst::Create(PatCtx, PatDivR, PatBBR);
-
-    // Fill in the functions to compare
-    BasicBlock *BBL = BasicBlock::Create(CtxL, "", FL);
-    BasicBlock *BBR = BasicBlock::Create(CtxR, "", FR);
-
-    Constant *ConstL1 = ConstantInt::get(Type::getInt8Ty(CtxL), 0);
-    Constant *ConstL2 = ConstantInt::get(Type::getInt8Ty(CtxL), 1);
-    Constant *ConstR1 = ConstantInt::get(Type::getInt8Ty(CtxR), 0);
-    Constant *ConstR2 = ConstantInt::get(Type::getInt8Ty(CtxR), 1);
-
-    auto SubL = BinaryOperator::Create(
-            BinaryOperator::Sub, ConstL1, ConstL2, "", BBL);
-    auto SubR = BinaryOperator::Create(
-            BinaryOperator::Sub, ConstR2, ConstR1, "", BBR);
-
-    CallInst::Create(FL->getFunctionType(), FL, "", BBL);
-    CallInst::Create(FR->getFunctionType(), FR, "", BBR);
-
-    auto DivR =
-            BinaryOperator::Create(BinaryOperator::SDiv, SubR, SubR, "", BBR);
-
-    ReturnInst::Create(CtxL, SubL, BBL);
-    ReturnInst::Create(CtxR, DivR, BBR);
+    auto left = R"(define i8 @f() {
+        %1 = sub i8 0, 1          ; matched
+        %2 = call i8 @f()         ; skipped
+        ret i8 %1
+    })";
+    auto right = R"(define i8 @f() {
+        %1 = sub i8 1, 0          ; matched
+        %2 = call i8 @f()         ; skipped
+        %3 = sdiv i8 %1, %1       ; matched
+        ret i8 %3
+    })";
+    CREATE_FROM_LLVM(left, right);
 
     // Create a pattern set with the pattern module and add it to the comparator
     CustomPatternSet PatSet;
