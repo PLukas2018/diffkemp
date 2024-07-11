@@ -1,0 +1,17 @@
+name: 'WIP PR commenting "bot"'
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  comments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Testing commenting with GitHub actions'
+            })
