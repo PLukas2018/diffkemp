@@ -654,10 +654,19 @@ TypeInfo getPointeeStructTypeInfo(const Value *Val,
         return {"", 0};
 
     // Get the pointee type
-    const DIType *PointeeTy = PtrTy->getBaseType();
+    DIType *PointeeTy = PtrTy->getBaseType();
     if (!PointeeTy) {
         // Base type is null -> the pointer type is void *.
         return {"", 0};
+    }
+
+    StringRef typeName;
+
+    while (auto derivedType = dyn_cast<DIDerivedType>(PointeeTy)) {
+        if (derivedType->getTag() == dwarf::DW_TAG_typedef) {
+            typeName = derivedType->getName();
+        }
+        PointeeTy = derivedType->getBaseType();
     }
 
     // Check if the pointee type is a structured type (composite type)
@@ -665,7 +674,11 @@ TypeInfo getPointeeStructTypeInfo(const Value *Val,
     if (!StrTy)
         return {"", 0};
 
-    return {StrTy->getName(), StrTy->getSizeInBits() / 8};
+    if (! StrTy->getName().empty()) {
+        typeName = StrTy->getName();
+    }
+
+    return {typeName, StrTy->getSizeInBits() / 8};
 #else
     // Get the type of the value
     Type *Ty = Val->getType();

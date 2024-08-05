@@ -1800,6 +1800,8 @@ int DifferentialFunctionComparator::cmpMemset(const CallInst *CL,
 
     TypeInfo TypeInfoL =
             getPointeeStructTypeInfo(ValL, &LayoutL, FnL->getName());
+    errs() << TypeInfoL.Name << "\n";
+    errs() << TypeInfoL.Size << "\n";
     TypeInfo TypeInfoR =
             getPointeeStructTypeInfo(ValR, &LayoutR, FnR->getName());
     if (TypeInfoL.Name.empty() || TypeInfoR.Name.empty()) {
