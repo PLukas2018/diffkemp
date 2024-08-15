@@ -1,36 +1,45 @@
 ```mermaid
 ---
-# This code renders an image showing the relation of the commands.
+# This code renders an image showingrankSpacing the relation of the commands.
 # The image does not show on the GitHub app, use a browser to see the image.
 config:
   theme: base
-  themeCSS: "
-/* redefinition of subgraphs labels */
-.cluster-label {
-  font-family: monospace;
-  font-size: 16px;
-}
-"
   themeVariables:
     nodeBorder: black
     mainBkg: white
     clusterBkg: white
-    clusterBorder: white
+    clusterBorder: black
     edgeLabelBackground: lightgrey
 ---
 flowchart LR
-%% Wrapping the whole thing in a subgraph so it has a white background even
-%% in a dark mode.
 subgraph G[" "]
-    direction LR
-    %% nodes
-    fs("finding sources")
-    cs("compilation of sources")
-    sc("snapshot creation")
-    %% edges
-    fs --> cs --> sc
-    click sc "#snapshot-creation" "link"
+  subgraph dk["DiffKemp"]
+    sg -- "snapshots" --> sc -- "semantic differences" --> rv
+    sg["1. Snapshot generation"]
+    sc["2. Snapshot comparison"]
+    rv["3. Result visualisation"]
+    subgraph simpll["SimpLL"]
+      ma("ModuleAnalysis")
+      dfc("DifferentialFunctionComparator")
+      cc("CustomPatternComparator")
+      ma -.-> dfc -.-> cc
+    end
+  end
+  subgraph llvm["LLVM project"]
+    direction TB
+    clang("clang -emit-llvm")
+    opt("opt")
+    fc("FunctionComparator")
+    clang ~~~ opt ~~~ fc
+  end
+  sg -.-> clang
+  sc -.-> simpll
+  sg -.-> opt
+  dfc -.-> fc
 end
+%% style
+classDef mono font-family:monospace
+class ccw,cg,ma,mc,dfc,fc,cc,clang,opt mono
 ```
 
 
