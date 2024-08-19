@@ -62,7 +62,7 @@ In case a custom *semantics-preserving patterns* were provided by the user, the 
 
 ## Snapshot generation
 
-Three commands. The commands compile the project to LLVM IR and creates a snapshot. The process consists of:
+The process consists of:
 
   1. **Finding the necessary source files** which contains definitions of symbols specified by the user.
   2. **Compilation of the sources to LLVM IR** for which we are using `clang` compiler using `clang -S -emit-llvm ...` command which compiles the source file to human readable LLVM IR. We are also running on the LLVM IR file some optimisation passes using the `opt` utility to make the comparision easier (`dce` - dead code elimination, `simplifycfg` - simplifying control flow graph, ...).
@@ -91,12 +91,6 @@ classDiagram
   SingleLlvmFinder <|-- SingleCBuilder
   SourceTree
   <<abstract>> LlvmSourceFinder
-  %%note for KernelSourceTree "build-kernel"
-  %%note for SingleLlvmFinder "llvm-to-snapshot"
-  %%note for WrapperBuildFinder "llvm-to-snapshot"
-  %%note for KernelLlvmSourceFinder "build-kernel"
-  %%note for SingleLlvmFinder "build of single C file"
-  %%note for WrapperBuildFinder "build of make-based projects"
 ```
 
 
@@ -160,7 +154,35 @@ LlvmSourceFinder - llvm module lookup for a symbol, finding source and building 
 
 ### `build-kernel`
 
-- 
+-  Kernel sources are
+    compiled into LLVM IR on-the-fly as necessary.
+    Supports two kinds of symbol lists to generate the snapshot from:
+      - list of functions (default)
+      - list of sysctl options
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram of compilation kernel to LLVM IR files
+config:
+  sequence:
+    mirrorActors: false
+---
+sequenceDiagram
+  KernelLlvmSourceBuilder->>cscope: build cscope database
+  loop for each function
+    KernelLlvmSourceBuilder->>+cscope: get source file for symbol(function)
+    cscope-->>-KernelLlvmSourceBuilder: *.c
+    KernelLlvmSourceBuilder->>+make: get command for compiling C file to object file(*.c)
+    make-->>-KernelLlvmSourceBuilder: command
+    KernelLlvmSourceBuilder->>+clang: clang -emit-llvm *.c + command options_find_srcs_with_symbol_def
+    clang->>-KernelLlvmSourceBuilder: *.ll
+    participant O as opt
+    KernelLlvmSourceBuilder->>+O: *.ll
+    O-->>-KernelLlvmSourceBuilder: optimised *.ll
+  end
+```
 
 ## Snapshot comparison
 
