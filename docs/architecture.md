@@ -347,6 +347,44 @@ sequenceDiagram
   end
 ```
 
+#### DifferentialFunctionComparator
+
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram for creating of snapshot from make-based project
+config:
+  sequence:
+    mirrorActors: false
+---
+stateDiagram-v2
+  [*] --> cmpFun
+  state "ModuleComparator::compareFunctions" as cmpFun {
+    state compare {
+      state "All basic blocks visited?" as abbv
+      state "Next basic block" as nbb
+      state abbv_choice <<choice>>
+      abbv --> abbv_choice
+      abbv_choice --> nbb: no
+      nbb --> cmpBasicBlocks
+      state cmpBasicBlocks {
+        state "All instructions compared?" as alc
+        state "Next instruction" as ni
+        alc --> ni: no
+        state alc_choice <<choice>>
+        ni --> alc_choice
+        alc_choice --> cmpOperationsWithOperands: no
+        cmpOperationsWithOperands --> equal?
+      }
+      alc_choice --> abbv: yes
+      abbv_choice --> [*]: yes
+    }
+  }
+```
+
+
 Source files are located in `diffkemp/simpll` directory.
 
 - CFII
