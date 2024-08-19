@@ -4,6 +4,7 @@
 ---
 # This code renders an image, which does not show on the GitHub app, use a browser
 # to see the image.
+title: DiffKemp architecture
 config:
   theme: base
   themeVariables:
@@ -70,6 +71,36 @@ Three commands. The commands compile the project to LLVM IR and creates a snapsh
 
 Implementation is divided into multiple classes:
 
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Classes used for building of snapshots
+config:
+  class:
+    dividerMargin: 0
+---
+classDiagram
+  direction LR
+  Snapshot --> SourceTree
+  SourceTree --> LlvmSourceFinder
+  SourceTree <|-- KernelSourceTree
+  LlvmSourceFinder <|-- SingleLlvmFinder
+  LlvmSourceFinder <|-- WrapperBuildFinder
+  LlvmSourceFinder <|-- KernelLlvmSourceFinder
+  SingleLlvmFinder <|-- SingleCBuilder
+  SourceTree
+  <<abstract>> LlvmSourceFinder
+  %%note for KernelSourceTree "build-kernel"
+  %%note for SingleLlvmFinder "llvm-to-snapshot"
+  %%note for WrapperBuildFinder "llvm-to-snapshot"
+  %%note for KernelLlvmSourceFinder "build-kernel"
+  %%note for SingleLlvmFinder "build of single C file"
+  %%note for WrapperBuildFinder "build of make-based projects"
+```
+
+
 - `LlvmSourceFinder` (`diffkemp/llvm_ir/llvm_source_finder.py`) its main purpose is to find the files containing symbols specified by the user in the `SYMBOL_LIST`. For some commands the class also handles the compilation of the necessary source files to LLVM IR.
 
   - For `build` command single C file is used `SingleCBuilder` which compiles the file to LLVM IR.
@@ -92,6 +123,12 @@ snapshot - structure representing one version of the program (avoids need to kee
 SourceTree, LlvmSourceFinder - classes relevant for looking up modules relevant for a feature, finding source code and building it if needed
 SourceTree - look up source files based on symbols, derived classes extend the support (KernelSourceTree - sysctl parameters, kernel modules)
 LlvmSourceFinder - llvm module lookup for a symbol, finding source and building it
+- `diffkemp-wdb` file
+
+
+### `build-kernel`
+
+- 
 
 ## Snapshot comparison
 
