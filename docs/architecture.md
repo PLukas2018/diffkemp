@@ -323,6 +323,30 @@ SimpLL - cpp, diffkemp uses it via Python's FFI, calling it as a seperate proces
 
 - ### SimpLL
 
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram for creating of snapshot from make-based project
+config:
+  sequence:
+    mirrorActors: false
+---
+sequenceDiagram
+  SimpLL->>ModuleAnalysis: result = processAndCompare(config)
+  loop "foreach module"
+    ModuleAnalysis->>ModuleAnalysis: preprocessModule(module)
+  end
+  ModuleAnalysis->>ModuleAnalysis: simplifyModulesDiff(modules)
+  ModuleAnalysis->>ModuleComparator: compareFunctions(fun1, fun2)
+  ModuleComparator->>DifferentialFunctionComparator: result = compare()
+  opt if not equal and tryInline
+    ModuleComparator->>ModuleComparator: tryToInline()
+    ModuleComparator->>DifferentialFunctionComparator: result = compare()
+  end
+```
+
 Source files are located in `diffkemp/simpll` directory.
 
 - CFII
