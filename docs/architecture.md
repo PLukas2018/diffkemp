@@ -2,7 +2,7 @@
 
 ```mermaid
 ---
-# This code renders an image, which does not show on the GitHub app, use a browser
+# This code renders an image, that does not show on the GitHub app, use a browser
 # to see the image.
 title: DiffKemp architecture
 config:
@@ -33,32 +33,34 @@ subgraph G[" "]
     clang("clang -emit-llvm")
     opt("opt")
     fc("FunctionComparator")
+    %% invisible edges helps top to bottom orientation
     clang ~~~ opt ~~~ fc
   end
   sg -.-> clang
-  sc -.-> simpll
   sg -.-> opt
+  sc -.-> simpll
   dfc -.-> fc
 end
 %% style
 classDef mono font-family:monospace
 class ma,dfc,fc,cc,clang,opt mono
 ```
-DiffKemp is made up of several parts:
-- **Python part** (located in `diffkemp/` directory) responsible for processing of the user inputs, compiling projects to snapshots, aggregation of comparison results and its reporting.
-- the **SimpLL** library (located in `diffkemp/simpll/`): the core of DiffKemp, written in C++ for performance reasons, responsible of simplification and semantic comparison of two version of project functions, 
-- **Result Viewer** (located in `view/` directory) web frontend, written using React and JavaScript, responsible for visualisation of found differences. 
-The project is built upon the [LLVM project](https://llvm.org/), specifically, it uses [LLVM IR]](https://llvm.org/docs/LangRef.html) for semantic comparison of the analysed project versions.
-DiffKemp uses [`CMake`](https://cmake.org/) as its build system.
 
-The different parts of DiffKemp plays its role in individual phases:
-1. **Snapshot generation** which compiles the source code of analysed project to LLVM IR using `clang` compiler.
-   Then it runs optimisation passes (using `opt`) to simplify the LLVM IR. The compiled project is saved to a directory which we call **snapshot**,
-   the directory also contains metadata.
-2. **Snapshot comparison** compares two versions of the analaysed project that were compiled into snapshots. Uses the SimpLL library for comparison of individual functions. The library firstly simplifies the LLVM IR in `ModuleAnalysis` class and then it uses `DifferentialFunctionComparator` class for comparison. The class is build upon LLVM [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class
-which compares instruction by instruction and extends it with built-in semantic preserving patterns which handles little bit more difficult refactorings.
-In case a custom *semantics-preserving patterns* were provided by the user, the `DifferentialFunctionComparator` also uses `CustomPaternComparator` to be able tp handle more specific refactorings/changes.
-3. **Result visualisation** which visualises source codes of functions that were evaluated as semantically different.
+DiffKemp is composed of several parts:
+- **Python component** (located in the `diffkemp/` directory): Responsible for the processing of user inputs, compiling projects into snapshots, aggregating comparison results, and generating reports.
+- **SimpLL** library (located in the `diffkemp/simpll/` directory): The core of DiffKemp, written in C++ for performance reason. It is responsible for the simplification and semantic comparison of two versions of project functions.
+- **Result Viewer** (located in the `view/` directory): A web application, written in React and JavaScript, used for visualisation of differences found during the comparison. 
+
+DiffKemp uses  [`CMake`](https://cmake.org/) as its build system and relies on the [LLVM project](https://llvm.org/). Specifically, it uses [LLVM IR](https://llvm.org/docs/LangRef.html) for representation and comparison of different analysed project versions.
+
+The different parts of DiffKemp play their roles in individual phases:
+1. **Snapshot generation**: The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
+   After compilation, optimisation passes are run (using `opt`) to simplify the LLVM IR. The compiled project is saved to a directory, which we call **snapshot**.
+2. **Snapshot comparison**: Two snapshots (corresponding to different versions of the analysed project) are compared using the SimpLL library.
+   - Firstly, the library for each snapshot simplifies and analyses the LLVM IR files/modules in which are located analysed symbols. This is done using the `ModuleAnalysis` class.
+   - Then it uses the `DifferentialFunctionComparator` class for the comparison itself. The class extends LLVM's [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class. The `FunctionComparator` class compares functions instruction-by-instruction, DiffKemp extends it by supporting built-in semantic preserving patterns for handling more complex changes/refactorings.
+   - If both the instruction-by-instruction comparison and the built-in patterns fail to detect semantic equality, and the user has provided custom *semantics-preserving patterns*, the `DifferentialFunctionComparator` also uses `CustomPatternComparator` to match changes against these patterns.
+3. **Result visualisation**: The result viewer displays the source code of functions evaluated as semantically different.
 
 ## Snapshot generation
 
