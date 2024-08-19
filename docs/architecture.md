@@ -78,8 +78,7 @@ Implementation is divided into multiple classes:
 # to see the image.
 title: Classes used for building of snapshots
 config:
-  class:
-    dividerMargin: 0
+  theme: neutral
 ---
 classDiagram
   direction LR
@@ -110,8 +109,40 @@ classDiagram
 - `SourceTree` class (`diffkemp/llvm_ir/source_tree.py`), it is extension of `LlvmSourceFinder` and it represent the source directory/tree of the project.
 - `Snapshot` class (`diffkemp/snapshot.py`) used for representing and also for saving and loading the created snapshot.
 
+Structure of 
+
+### `build`: snapshot generation of single C file
 
 ### `build`: snapshot generation of `make`-based projects
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram for creating of snapshot from make-based project
+config:
+  sequence:
+    mirrorActors: false
+---
+sequenceDiagram
+  actor User
+  User->>+build: build(project source directory) 
+  build->>+make: make CC=cc_wrapper ...
+  loop
+    make->>+cc_wrapper: *.c + options ...
+    cc_wrapper->>+clang: clang -emit-llvm *.c ...
+    clang-->>-cc_wrapper: *.ll
+    cc_wrapper-->>-make: *.ll
+  end
+  make-->>-build: *.ll
+  participant O as opt
+  loop
+    build->>+O: *.ll
+    O-->>-build: optimised *.ll
+  end
+  build->>build: snapshot = generate_from_function_list()
+  build-->>-User: snapshot directory
+```
 
 - TODO: mention `cc_wrapper` run python script x compiled using RPython to binary to make the compilation run faster
 
@@ -125,6 +156,7 @@ SourceTree - look up source files based on symbols, derived classes extend the s
 LlvmSourceFinder - llvm module lookup for a symbol, finding source and building it
 - `diffkemp-wdb` file
 
+### `llvm-to-snapshot`
 
 ### `build-kernel`
 
