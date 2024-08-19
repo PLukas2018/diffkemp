@@ -230,6 +230,63 @@ classDiagram
   }
 ```
 
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Classes used for creating results
+config:
+  theme: neutral
+---
+classDiagram
+  direction TB
+  class Result {
+    kind
+    diff
+  }
+  Result --> Entity : first
+  Result --> Entity : second
+  Result --> Result : inner
+  Entity --> Callstack : callstack
+  class Entity {
+    name
+    filename
+    line
+  }
+```
+
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Classes used for creating results
+config:
+  theme: neutral
+  mirrorActors: false
+---
+sequenceDiagram
+  loop "for each compared function"
+    compare->>functions_diff: (modules, function name)
+    create participant tR
+    participant tR as Result:totalResult
+    functions_diff->>tR: Result(function names)
+    functions_diff->>SimpLL: curr_result_graph = run(modules, function name)
+    participant CG as CachingGraph:totalCachingGraph
+    functions_diff->>CG: absorb_graph(curr_result_graph)
+    functions_diff->>CG: objects_to_compare = graph_to_fun_pair_list(function name)
+    loop foreach object
+      create participant r
+      participant r as Result:r
+      functions_diff->>r: result = Result(compared object and its result)
+      opt "not equal result"
+         functions_diff->>functions_diff: diff = syntax_diff(compared object)
+      end
+      functions_diff->>tR: add_inner(result)
+    end
+    functions_diff-->>compare: totalResult
+  end
+```
+
 Config - specification of custom patterns, turning on and off builtin pattern, (turning on the smt solver, ...).
 <!-- TODO Caching ?? -->
 For each specified symbol it:
