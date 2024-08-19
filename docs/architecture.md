@@ -191,6 +191,44 @@ sequenceDiagram
 - `ComparisonGraph`
 - module caching
 
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Classes used for caching of comparison results
+config:
+  theme: neutral
+---
+classDiagram
+  direction TB
+  ComparisonGraph *-- Vertex
+  Vertex *-- NonFunDiff
+  Vertex *-- Edge
+  NonFunDiff <|-- SyntaxDiff
+  NonFunDiff <|-- TypeDiff
+  class Vertex {
+    + names
+    + files
+    + lines
+    + result
+  }
+  class Edge {
+    + filename
+    + line
+    + target_name
+  }
+  class NonFunDiff {
+    + name
+    + callstack
+  }
+  class SyntaxDiff {
+    + kind
+  }
+  class TypeDiff {
+    + file
+    + line
+  }
+```
 
 Config - specification of custom patterns, turning on and off builtin pattern, (turning on the smt solver, ...).
 <!-- TODO Caching ?? -->
