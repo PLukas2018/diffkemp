@@ -4,7 +4,7 @@
 ---
 # This code renders an image, that does not show on the GitHub app, use a browser
 # to see the image.
-title: DiffKemp architecture
+title: Simplified DiffKemp architecture
 config:
   theme: base
   themeVariables:
@@ -48,28 +48,29 @@ class ma,dfc,fc,cc,clang,opt mono
 
 DiffKemp is composed of several parts:
 - **Python component** (located in the `diffkemp/` directory): Responsible for the processing of user inputs, compiling projects into snapshots, aggregating comparison results, and generating reports.
-- **SimpLL** library (located in the `diffkemp/simpll/` directory): The core of DiffKemp, written in C++ for performance reason. It is responsible for the simplification and semantic comparison of two versions of project functions.
-- **Result Viewer** (located in the `view/` directory): A web application, written in React and JavaScript, used for visualisation of differences found during the comparison. 
+- **SimpLL library** (located in the `diffkemp/simpll/` directory): The core of DiffKemp, written in C++ for performance reason. It is responsible for the simplification and semantic comparison of two versions of project functions.
+- **Result viewer** (located in the `view/` directory): A web application, written in React and JavaScript, used for visualisation of differences found during the comparison. 
 
-DiffKemp uses  [`CMake`](https://cmake.org/) as its build system and relies on the [LLVM project](https://llvm.org/). Specifically, it uses [LLVM IR](https://llvm.org/docs/LangRef.html) for representation and comparison of different analysed project versions.
+DiffKemp uses  [`CMake`](https://cmake.org/) as its build system and relies on the [LLVM project](https://llvm.org/). Specifically, it uses [LLVM IR](https://llvm.org/docs/LangRef.html) for representation and comparison of analysed project versions.
 
 The different parts of DiffKemp play their roles in individual phases:
 1. [**Snapshot generation**](#snapshot-generation): The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
    After compilation, optimisation passes are run (using `opt`) to simplify the LLVM IR. The compiled project is saved to a directory, which we call **snapshot**.
 2. **Snapshot comparison**: Two snapshots (corresponding to different versions of the analysed project) are compared using the SimpLL library.
-   - Firstly, the library for each snapshot simplifies and analyses the LLVM IR files/modules in which are located analysed symbols. This is done using the `ModuleAnalysis` class.
-   - Then it uses the `DifferentialFunctionComparator` class for the comparison itself. The class extends LLVM's [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class. The `FunctionComparator` class compares functions instruction-by-instruction, DiffKemp extends it by supporting built-in semantic preserving patterns for handling more complex changes/refactorings.
-   - If both the instruction-by-instruction comparison and the built-in patterns fail to detect semantic equality, and the user has provided custom *semantics-preserving patterns*, the `DifferentialFunctionComparator` also uses `CustomPatternComparator` to match changes against these patterns.
+   - Firstly, the library for each snapshot simplifies (by applying multiple code transformations) and analyses the LLVM files/modules in which are located definitions of analysed symbols. This is done using the `ModuleAnalysis` class.
+   - The core of comparison is the `DifferentialFunctionComparator` class which extends LLVM's [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class.
+     The `FunctionComparator` class handles comparison instruction-by-instruction. DiffKemp extends its functionality by handling semantics-preserving changes that adhere to one of the built-in patterns.
+     This enable to handle more complex changes/refactorings.
+   - Additional (custom) patterns can be specified manually and passed to the comparison phase. These patterns are used if both the instruction-by-instruction comparison and the built-in patterns fail to         detect semantic equality. In that case `DifferentialFunctionComparator` uses `CustomPatternComparator` class to try match the changes against the provided patterns.
 3. **Result visualisation**: The result viewer displays the source code of functions evaluated as semantically different.
 
 ## Snapshot generation
 
 The process consists of:
 
-  1. **Finding the necessary source files** which contains definitions of symbols specified by the user.
-  2. **Compilation of the sources to LLVM IR** for which we are using `clang` compiler using `clang -S -emit-llvm ...` command which compiles the source file to human readable LLVM IR. We are also running on the LLVM IR file some optimisation passes using the `opt` utility to make the comparision easier (`dce` - dead code elimination, `simplifycfg` - simplifying control flow graph, ...).
-  3. Creating a snapshot. The snapshot contains copy of necessary source files and their LLVM IR representation and metadata. The metadata are saved in `snapshot.yaml` file and it mainly contains list of the symbols specified by the user and the location of LLVM IR files in which are the symbols defined.
-<!-- TODO human readable - replace -->
+  1. **Finding source files** which contains definitions of symbols specified by the user.
+  2. **Compilation of the source files to LLVM IR** for which we are using `clang` compiler using `clang -S -emit-llvm ...` command which compiles the source file to human readable LLVM IR. We are also running on the LLVM modules some optimisation passes using the `opt` utility to make the comparision easier (`dce` - dead code elimination, `simplifycfg` - simplifying control flow graph, ...).
+  3. **Creating a snapshot** and saving it to specified directory. 
 
 Implementation is divided into multiple classes:
 
@@ -200,9 +201,6 @@ sequenceDiagram
   build->>build: snapshot = generate_from_function_list()
   build-->>-User: snapshot directory
 ```
-
-- TODO: mention `cc_wrapper` run python script x compiled using RPython to binary to make the compilation run faster
-- - `diffkemp-wdb` file
 
 ### `build`: snapshot generation of single C file
 
