@@ -33,6 +33,8 @@ def make_argument_parser():
                           help="output directory of the snapshot")
     build_ap.add_argument("symbol_list", nargs='?', type=is_file,
                           help="list of symbols to compare")
+    build_ap.add_argument("--build-system", choices=["make", "meson"],
+                          default="make")
     build_ap.add_argument("--build-program", help="make tool used to be used\
                           for build", default="make")
     build_ap.add_argument("--build-file", help="filename of Makefile to be\

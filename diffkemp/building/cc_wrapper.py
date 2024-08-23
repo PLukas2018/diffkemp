@@ -113,9 +113,9 @@ def wrapper(argv):
     argv[0] = "gcc"
     try:
         check_call("gcc", argv)
-    except CalledProcessError:
+    except CalledProcessError as e:
         print("cc_wrapper: warning: original build command failed")
-        return 1
+        return e.returncode
 
     # Analyze and modify parameters for clang (phase 1)
     clang_argv = []
@@ -148,6 +148,8 @@ def wrapper(argv):
             # Mark as linking with sources to detect hybrid mode
             linking_with_sources = True
         clang_argv.append(arg)
+    if output_file is None:
+        return 0
 
     if linking_with_sources and clang == llvm_link:
         # Compile/link mode with object files detected

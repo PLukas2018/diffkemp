@@ -54,6 +54,7 @@ def build_c_project(args):
     tmpdir = mkdtemp()
     db_filename = os.path.join(tmpdir, "diffkemp-wdb")
     environment = {
+        "CC": cc_wrapper,
         wrapper_env_vars["db_filename"]: db_filename,
         wrapper_env_vars["clang"]: args.clang,
         wrapper_env_vars["clang_append"]: ",".join(args.clang_append)
@@ -68,6 +69,55 @@ def build_c_project(args):
     }
     environment.update(os.environ)
 
+    if args.build_system == "make":
+        build_make(cc_wrapper, args, environment)
+    elif args.build_system == "meson":
+        check_call(["meson", "setup", "build"], env=environment, cwd=args.source_dir)
+        check_call(["meson", "compile"], env=environment, cwd=os.path.join(args.source_dir, "build"))
+
+    # Run LLVM IR simplification passes if the user did not request
+    # to use the default project's optimization.
+    if not args.no_opt_override:
+        # Run llvm passes on created LLVM IR files.
+        with open(db_filename, "r") as db_file:
+            for line in [r for r in db_file if r.startswith("o:")]:
+                llvm_file = line.split(":")[1].rstrip()
+                try:
+                    opt_llvm(llvm_file)
+                except BuildException:
+                    # Unsuccessful optimization, leaving as it is.
+                    pass
+
+    # Create a new snapshot from the source directory.
+    source_finder = WrapperBuildFinder(args.source_dir, db_filename)
+    source = SourceTree(args.source_dir, source_finder)
+    snapshot = Snapshot.create_from_source(source, args.output_dir,
+                                           "function")
+
+    # Copy the database file into the snapshot directory
+    shutil.copyfile(db_filename, os.path.join(args.output_dir, "diffkemp-wdb"))
+
+    # Build sources for symbols from the list into LLVM IR
+    user_symbol_list = True
+    if args.symbol_list is None:
+        user_symbol_list = False
+        args.symbol_list = os.path.join(args.source_dir, "function_list")
+    symbol_list = read_symbol_list(args.symbol_list)
+    if not symbol_list:
+        if user_symbol_list:
+            sys.stderr.write(EMSG_EMPTY_SYMBOL_LIST)
+        else:
+            sys.stderr.write("ERROR: no symbols were found in the project\n")
+        sys.exit(errno.EINVAL)
+    generate_from_function_list(snapshot, symbol_list)
+
+    # Create the snapshot directory containing the YAML description file
+    snapshot.generate_snapshot_dir()
+    snapshot.finalize()
+    # Removing the tmp dir with diffkemp-wdb file
+    shutil.rmtree(tmpdir)
+
+def build_make(cc_wrapper, args, environment):
     # Determine make args
     make_cc_setting = 'CC="{}"'.format(cc_wrapper)
     make_args = [args.build_program, "-C", args.source_dir, make_cc_setting]
@@ -119,49 +169,6 @@ def build_c_project(args):
 
     # Build the project using generated wrapper
     check_call(make_target_args, env=environment)
-
-    # Run LLVM IR simplification passes if the user did not request
-    # to use the default project's optimization.
-    if not args.no_opt_override:
-        # Run llvm passes on created LLVM IR files.
-        with open(db_filename, "r") as db_file:
-            for line in [r for r in db_file if r.startswith("o:")]:
-                llvm_file = line.split(":")[1].rstrip()
-                try:
-                    opt_llvm(llvm_file)
-                except BuildException:
-                    # Unsuccessful optimization, leaving as it is.
-                    pass
-
-    # Create a new snapshot from the source directory.
-    source_finder = WrapperBuildFinder(args.source_dir, db_filename)
-    source = SourceTree(args.source_dir, source_finder)
-    snapshot = Snapshot.create_from_source(source, args.output_dir,
-                                           "function")
-
-    # Copy the database file into the snapshot directory
-    shutil.copyfile(db_filename, os.path.join(args.output_dir, "diffkemp-wdb"))
-
-    # Build sources for symbols from the list into LLVM IR
-    user_symbol_list = True
-    if args.symbol_list is None:
-        user_symbol_list = False
-        args.symbol_list = os.path.join(args.source_dir, "function_list")
-    symbol_list = read_symbol_list(args.symbol_list)
-    if not symbol_list:
-        if user_symbol_list:
-            sys.stderr.write(EMSG_EMPTY_SYMBOL_LIST)
-        else:
-            sys.stderr.write("ERROR: no symbols were found in the project\n")
-        sys.exit(errno.EINVAL)
-    generate_from_function_list(snapshot, symbol_list)
-
-    # Create the snapshot directory containing the YAML description file
-    snapshot.generate_snapshot_dir()
-    snapshot.finalize()
-    # Removing the tmp dir with diffkemp-wdb file
-    shutil.rmtree(tmpdir)
-
 
 def build_c_file(args):
     # It ignores following args: build-program, build-file, clang-drop,
