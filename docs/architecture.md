@@ -54,7 +54,7 @@ DiffKemp is composed of several parts:
 DiffKemp uses  [`CMake`](https://cmake.org/) as its build system and relies on the [LLVM project](https://llvm.org/). Specifically, it uses [LLVM IR](https://llvm.org/docs/LangRef.html) for representation and comparison of different analysed project versions.
 
 The different parts of DiffKemp play their roles in individual phases:
-1. **Snapshot generation**: The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
+1. [**Snapshot generation**](#snapshot-generation): The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
    After compilation, optimisation passes are run (using `opt`) to simplify the LLVM IR. The compiled project is saved to a directory, which we call **snapshot**.
 2. **Snapshot comparison**: Two snapshots (corresponding to different versions of the analysed project) are compared using the SimpLL library.
    - Firstly, the library for each snapshot simplifies and analyses the LLVM IR files/modules in which are located analysed symbols. This is done using the `ModuleAnalysis` class.
@@ -72,7 +72,6 @@ The process consists of:
 <!-- TODO human readable - replace -->
 
 Implementation is divided into multiple classes:
-
 
 ```mermaid
 ---
@@ -95,21 +94,83 @@ classDiagram
   <<abstract>> LlvmSourceFinder
 ```
 
+- [`LlvmSourceFinder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/llvm_source_finder.py) is an abstract class with a concrete implementation based on the used command. The class is responsible for finding LLVM modules (source files) containing specific symbol/function, and for some commands it also handles firstly finding neccessry C source files and its compilation to LLVM IR.
+- [`SourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/source_tree.py) class represents the source tree of analysed project, it wraps the `LlvmSourceFinder` class and provides its functionality - providing necessary LLVM module files, the derived class [`KernelSourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/kernel_source_tree.py) extend it the support by enabling to get modules containing definitions of sysctl options or kernel modules.
+- [`Snapshot`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/snapshot.py) class used for representing snapshot. Snapshot represents one version of the program and contains
+  - Relevant C source files (containing definitions of compared symbols and symbols used by them) which are used for displaying differences in the code after comparison).
+  - The C files compiled to LLVM IR, which are used for the comparison itself.
+  - Metadata file `snapshot.yaml` which looks like this
+    ```yaml
+    # For more details look at the implementation
+    - created_time: Date and time of snapshot creation # YYYY-MM-DD hh:mm:ss.sTZ                         
+      diffkemp_version: x.y.z                                           
+      list: # List of compared symbols (functions or sysctl options) and its metadata
+      # In cases of function comparison contains only the inner `functions` list
+      - functions:                                                           
+        - glob_var: null # For sysctl name of global variable whose usage is analysed within the function.                                                       
+          name: Name of function                                                                
+          llvm: Relative path to module containing the function                                                                
+          tag: null # In case of sysctl 'proc handler function' or 'using data variable "..."'
+        # Only for sysctl
+        sysctl: Sysctl option name                                                                   
+      list_kind: Type of comparison function/sysctl                                                           
+      llvm_source_finder:                                                           
+        kind: Used LlvmSourceFinder class                                                        
+      llvm_version: XX                                                              
+      source_dir: Absolute path to source directory of the project
+    ```
 
-- `LlvmSourceFinder` (`diffkemp/llvm_ir/llvm_source_finder.py`) its main purpose is to find the files containing symbols specified by the user in the `SYMBOL_LIST`. For some commands the class also handles the compilation of the necessary source files to LLVM IR.
+### `build-kernel`
 
-  - For `build` command single C file is used `SingleCBuilder` which compiles the file to LLVM IR.
-  - For `llvm-to-snapshot` command is used `SingleLlvmFinder` class.
-  - The `build-kernel` command uses `KernelLlvmSourceBuilder` class which builds `cscope` database for the kernel to be able to easily find location of specified symbol definitions, and using the database it compiles the source files which contains the specified symbols to LLVM IR.
+The `build-kernel` command is used for creating snapshots from kernel source code, it does not compiles entire kernel but only necessary files based on compared symbols on the fly. The snapshot can be created using function list or list of sysctl options. It uses [`KernelLlvmSourceBuilder`]() class. It firstly builds the symbol cross-reference database for the analysed project using `cscope` tool to be able to easily find location of specified symbol definitions. Then depending on if the list of functions or sysctl options was provided it continues.
 
-- `SourceTree` class (`diffkemp/llvm_ir/source_tree.py`), it is extension of `LlvmSourceFinder` and it represent the source directory/tree of the project.
-- `Snapshot` class (`diffkemp/snapshot.py`) used for representing and also for saving and loading the created snapshot.
+In cases function list was provided, it does the following for each function from the list:
+  1. It finds source file in which the function is located using `cscope`.
+  2. By using `make` it finds out which options should be used for compiling the file.
+  3. It compiles the file to LLVM IR by using `clang` and the previously discovered options. It also runs `opt` to optimise the LLVM files.
+  4. Then it creates snapshots from the LLVM files.
 
-Structure of 
-
-### `build`: snapshot generation of single C file
+In case of sysctl is for each option:
+  1. Found table containing definition of the sysctl option.
+  2. Using SimpLL is extracted the name of the proc handler function and data variable for the given sysctl option from the table.
+  3. Using cscope found source file containing the proc handler function, the file is compiled to LLVM IR (similarly as was mentioned above).
+  4. Using cscope and SimpLL are found functions (and the source files in which they are located) which uses the sysctl data variable, the source files are compiled to LLVM IR.
+  5. The functions (respectively the corresponding LLVM modules) are added to snapshot and in comparison phase the functions are compared for semantic equvialency.
+```mermaid
+---
+# This code renders an image, which does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram of compilation kernel to LLVM IR files
+config:
+  sequence:
+    mirrorActors: false
+---
+sequenceDiagram
+  KernelLlvmSourceBuilder->>cscope: build cscope database
+  loop for each function
+    KernelLlvmSourceBuilder->>+cscope: get source file for symbol(function)
+    cscope-->>-KernelLlvmSourceBuilder: *.c
+    KernelLlvmSourceBuilder->>+make: get command for compiling C file to object file(*.c)
+    make-->>-KernelLlvmSourceBuilder: command
+    KernelLlvmSourceBuilder->>+clang: clang -emit-llvm *.c + command options_find_srcs_with_symbol_def
+    clang->>-KernelLlvmSourceBuilder: *.ll
+    participant O as opt
+    KernelLlvmSourceBuilder->>+O: *.ll
+    O-->>-KernelLlvmSourceBuilder: optimised *.ll
+  end
+```
 
 ### `build`: snapshot generation of `make`-based projects
+
+DiffKemp runs `make` on the project, but uses `cc_wrapper` instead of classic compiler (e.g. `gcc`),
+so the `make` calls for every file `cc_wrapper` to compile the file instead of the classic compiler.
+[`cc_wrapper`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/building/cc_wrapper.py) is Python script which compiles the file to LLVM IR instead of an object file,
+it also documents the path to created LLVM files/modules to `diffkemp-wdb` file. 
+If user has installed [RPython](https://rpython.readthedocs.io/en/latest/), when building DiffKemp
+`cc_wrapper` is compiled using RPython to binary form to make the snapshot building faster.
+After `make` finished the compilation, the LLVM modules are optimised using `opt`.
+Then using `WrapperBuildFinder` for the specified functions are located LLVM files which contain its definition and from
+these files is created the snapshot.
 
 ```mermaid
 ---
@@ -141,50 +202,15 @@ sequenceDiagram
 ```
 
 - TODO: mention `cc_wrapper` run python script x compiled using RPython to binary to make the compilation run faster
+- - `diffkemp-wdb` file
 
-snapshot - structure representing one version of the program (avoids need to keep entire project source code for comparison), contains
-- relevant source code files (for displaying differences in original source code)
-- corresponding LLVM IR files
-- index - which parts of code are relevant to each feature
+### `build`: snapshot generation of single C file
 
-SourceTree, LlvmSourceFinder - classes relevant for looking up modules relevant for a feature, finding source code and building it if needed
-SourceTree - look up source files based on symbols, derived classes extend the support (KernelSourceTree - sysctl parameters, kernel modules)
-LlvmSourceFinder - llvm module lookup for a symbol, finding source and building it
-- `diffkemp-wdb` file
+[`SingleCBuilder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/single_c_builder.py) class is used for compilation of the file to LLVM IR.
 
 ### `llvm-to-snapshot`
 
-### `build-kernel`
-
--  Kernel sources are
-    compiled into LLVM IR on-the-fly as necessary.
-    Supports two kinds of symbol lists to generate the snapshot from:
-      - list of functions (default)
-      - list of sysctl options
-
-```mermaid
----
-# This code renders an image, which does not show on the GitHub app, use a browser
-# to see the image.
-title: Simplified sequence diagram of compilation kernel to LLVM IR files
-config:
-  sequence:
-    mirrorActors: false
----
-sequenceDiagram
-  KernelLlvmSourceBuilder->>cscope: build cscope database
-  loop for each function
-    KernelLlvmSourceBuilder->>+cscope: get source file for symbol(function)
-    cscope-->>-KernelLlvmSourceBuilder: *.c
-    KernelLlvmSourceBuilder->>+make: get command for compiling C file to object file(*.c)
-    make-->>-KernelLlvmSourceBuilder: command
-    KernelLlvmSourceBuilder->>+clang: clang -emit-llvm *.c + command options_find_srcs_with_symbol_def
-    clang->>-KernelLlvmSourceBuilder: *.ll
-    participant O as opt
-    KernelLlvmSourceBuilder->>+O: *.ll
-    O-->>-KernelLlvmSourceBuilder: optimised *.ll
-  end
-```
+`SingleLlvmFinder` class is used for compilation of the file to LLVM IR.
 
 ## Snapshot comparison
 
