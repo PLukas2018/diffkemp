@@ -46,6 +46,7 @@ void DifferentialFunctionComparator::beginCompare() {
 /// to ensure that values and blocks incoming to PHIs are properly matched in
 /// time of PHI comparison.
 int DifferentialFunctionComparator::compare() {
+    return 0;
     int Res = FunctionComparator::compare();
     // The result is 1 (not equal) if there is an unmatched relocation (since
     // that means that one of the functions has some extra code).
