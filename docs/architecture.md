@@ -56,18 +56,18 @@ DiffKemp uses  [`CMake`](https://cmake.org/) as its build system and relies on t
 ## Phases of DiffKemp
 
 DiffKemp runs in phases, in which the different parts of DiffKemp play their roles:
-1. [**Snapshot generation**](#snapshot-generation):
+1. [**Snapshot generation**](#1.-snapshot-generation):
    - The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
    - After compilation, optimisation passes are run (using `opt`) to simplify the LLVM IR.
    - The compiled project is saved to a directory, which we call **snapshot**.
-2. [**Snapshot comparison**](#snapshot-comparison):
+2. [**Snapshot comparison**](#2.-snapshot-comparison):
    - Two snapshots (corresponding to different versions of the analysed project) are compared using the SimpLL library.
    - For each snapshot, the library simplifies (by applying multiple code transformations) and analyses the LLVM files/modules in which are located definitions of the analysed symbols. This is done using the `ModuleAnalysis` class.
    - The core comparison is handled by the `DifferentialFunctionComparator` class, which extends LLVM's [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class.
      The `FunctionComparator` class handles instruction-by-instruction comparison. DiffKemp extends this functionality by handling semantics-preserving changes (implemented as **built-in patterns**), enabling it to manage more  complex changes/refactorings.
    - Additional **(custom) patterns** can be specified manually and passed to the comparison phase. These patterns are used if both the instruction-by-instruction comparison and the built-in patterns fail to detect semantic equality. In such cases, the `DifferentialFunctionComparator` uses the `CustomPatternComparator` class to attempt to match the changes against the provided patterns.
    - The results of the comparison of individual symbols are aggregated, and the found differences are reported to the user.
-3. [**Result visualisation**](#result-visualisation):
+3. [**Result visualisation**](#3.-result-visualisation):
    - The result viewer enables the user to interactively explore the found differences (the analysed symbols that were evaluated as semantically non-equal). It shows the relation between the analysed symbols and the location causing the semantic non-equality, allowing the user to display the source code of the analysed project versions with highlighted syntactic differences that are likely causing the semantic non-equality.
 
 ## 1. Snapshot generation
