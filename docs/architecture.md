@@ -117,66 +117,25 @@ Classes involved in snapshot generation:
     - The source files compiled to LLVM IR, which are used for the actual comparison.
     - Metadata, saved in the snapshot directory as a `snapshot.yaml` file with the following structure:
       ```yaml
-      # For more details look at the implementation
-      - created_time: Date and time of snapshot creation # YYYY-MM-DD hh:mm:ss.sTZ                         
-        diffkemp_version: x.y.z                                           
-        list: # List of compared symbols (functions or sysctl options) and its metadata
-        # In cases of function comparison contains directly the list from the `functions` field`.
+      # For more details, refer to the implementation
+      - created_time: Date and time of snapshot creation (YYYY-MM-DD hh:mm:ss.sTZ)
+        diffkemp_version: x.y.z
+        list: # List of compared symbols (functions or sysctl options) and their metadata
+        # In cases of function comparison, contains directly the list from the `functions` field`.
         - functions:                                                           
           - glob_var: null # Name of the global variable whose usage is analysed within the function (only for sysctl).
             name: Name of function
             llvm: Relative path to module containing the function
-            tag: null # Only for sysctl, describes if the function is proc handler or uses the sysctl data variable.
+            tag: null # Only for sysctl, describes if the function is proc handler or uses the sysctl data variable
           # Only for sysctl
           sysctl: Sysctl option name
-        list_kind: Type of comparison function/sysctl                                                           
-        llvm_source_finder:                                                           
-          kind: Used LlvmSourceFinder class                                                        
-        llvm_version: XX                                                              
-        source_dir: Absolute path to source directory of the project
+        list_kind: Type of comparison (function/sysctl)
+        llvm_source_finder:
+          kind: Used LlvmSourceFinder class
+        llvm_version: XX
+        source_dir: Absolute path to the project's source directory
       ```
-
-### `build-kernel`
-
-The `build-kernel` command is used for creating snapshots from kernel source code, it does not compiles entire kernel but only necessary files based on compared symbols on the fly. The snapshot can be created using function list or list of sysctl options. It uses [`KernelLlvmSourceBuilder`]() class. It firstly builds the symbol cross-reference database for the analysed project using `cscope` tool to be able to easily find location of specified symbol definitions. Then depending on if the list of functions or sysctl options was provided it continues.
-
-In cases function list was provided, it does the following for each function from the list:
-  1. It finds source file in which the function is located using `cscope`.
-  2. By using `make` it finds out which options should be used for compiling the file.
-  3. It compiles the file to LLVM IR by using `clang` and the previously discovered options. It also runs `opt` to optimise the LLVM files.
-  4. Then it creates snapshots from the LLVM files.
-
-In case of sysctl is for each option:
-  1. Found table containing definition of the sysctl option.
-  2. Using SimpLL is extracted the name of the proc handler function and data variable for the given sysctl option from the table.
-  3. Using cscope found source file containing the proc handler function, the file is compiled to LLVM IR (similarly as was mentioned above).
-  4. Using cscope and SimpLL are found functions (and the source files in which they are located) which uses the sysctl data variable, the source files are compiled to LLVM IR.
-  5. The functions (respectively the corresponding LLVM modules) are added to snapshot and in comparison phase the functions are compared for semantic equvialency.
-```mermaid
----
-# This code renders an image, which does not show on the GitHub app, use a browser
-# to see the image.
-title: Simplified sequence diagram of compilation kernel to LLVM IR files
-config:
-  sequence:
-    mirrorActors: false
----
-sequenceDiagram
-  KernelLlvmSourceBuilder->>cscope: build cscope database
-  loop for each function
-    KernelLlvmSourceBuilder->>+cscope: get source file for symbol(function)
-    cscope-->>-KernelLlvmSourceBuilder: *.c
-    KernelLlvmSourceBuilder->>+make: get command for compiling C file to object file(*.c)
-    make-->>-KernelLlvmSourceBuilder: command
-    KernelLlvmSourceBuilder->>+clang: clang -emit-llvm *.c + command options_find_srcs_with_symbol_def
-    clang->>-KernelLlvmSourceBuilder: *.ll
-    participant O as opt
-    KernelLlvmSourceBuilder->>+O: *.ll
-    O-->>-KernelLlvmSourceBuilder: optimised *.ll
-  end
-```
-
-### `build`: snapshot generation of `make`-based projects
+### a) `build`: snapshot generation of `make`-based projects
 
 DiffKemp runs `make` on the project, but uses `cc_wrapper` instead of classic compiler (e.g. `gcc`),
 so the `make` calls for every file `cc_wrapper` to compile the file instead of the classic compiler.
@@ -217,11 +176,54 @@ sequenceDiagram
   build-->>-User: snapshot directory
 ```
 
-### `build`: snapshot generation of single C file
+### a) `build`: snapshot generation of single C file
 
 [`SingleCBuilder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/single_c_builder.py) class is used for compilation of the file to LLVM IR.
 
-### `llvm-to-snapshot`
+### b) `build-kernel`: snapshot generation from the Linux kernel
+
+The `build-kernel` command is used for creating snapshots from the source code of the kernel. It does not compile the entire kernel but only necessary files based on compared symbols on the fly. The snapshot can be created using a list of functions or sysctl options. It uses [`KernelLlvmSourceBuilder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/kernel_llvm_source_builder.py) class. It firstly builds the symbol cross-reference database for the kernel using `cscope` tool. It uses the database to find the location of symbol definitions and uses. Then depending on if the list of functions or sysctl options was provided the process differs. In any case in the end is created a snapshot containing LLVM modules necessary for semantic comparison.
+
+```mermaid
+---
+# This code renders an image, that does not show on the GitHub app, use a browser
+# to see the image.
+title: Simplified sequence diagram of compilation kernel to LLVM modules
+config:
+  sequence:
+    mirrorActors: false
+---
+sequenceDiagram
+  KernelLlvmSourceBuilder->>cscope: build cscope database
+  loop for each symbol
+    KernelLlvmSourceBuilder->>+cscope: get source file for symbol
+    cscope-->>-KernelLlvmSourceBuilder: *.c
+    KernelLlvmSourceBuilder->>+make: get command for compiling *.c file to object file
+    make-->>-KernelLlvmSourceBuilder: command
+    KernelLlvmSourceBuilder->>+clang: clang -emit-llvm -S *.c -o *.ll + command's options
+    clang->>-KernelLlvmSourceBuilder: *.ll
+    participant O as opt
+    KernelLlvmSourceBuilder->>+O: *.ll
+    O-->>-KernelLlvmSourceBuilder: optimised *.ll
+  end
+```
+
+#### Using a list of functions
+
+In cases list of functions was provided, it does the following for each function from the list:
+  1. It finds source file in which the function is located using `cscope`.
+  2. By using `make` it finds out which options should be used for compiling the file.
+  3. It compiles the file to LLVM IR by using `clang` and the previously discovered options. It also runs `opt` to optimise the LLVM files.
+
+#### Using a list of sysctl options
+
+In case list of sysctl options was provided, it does the following for each option from the list:
+  1. It finds a table containing the definition of the sysctl option.
+  2. Using SimpLL is extracted the name of the proc handler function and data variable for the given sysctl option from the table.
+  3. Using cscope found source file containing the proc handler function, the file is compiled to LLVM IR (similarly as was mentioned above).
+  4. Using cscope and SimpLL are found functions (and the source files in which they are located) which uses the sysctl data variable, the source files are compiled to LLVM IR.
+
+### c) `llvm-to-snapshot`: snapshot generation from a single LLVM IR file
 
 `SingleLlvmFinder` class is used for compilation of the file to LLVM IR.
 
