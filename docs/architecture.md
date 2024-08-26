@@ -5,17 +5,8 @@
 # This code renders an image, that does not show on the GitHub app, use a browser
 # to see the image.
 title: Simplified DiffKemp architecture
-config:
-  theme: base
-  themeVariables:
-    nodeBorder: black
-    mainBkg: white
-    clusterBkg: white
-    clusterBorder: black
-    edgeLabelBackground: lightgrey
 ---
-flowchart LR
-subgraph G[" "]
+flowchart TB
   subgraph dk["DiffKemp"]
     sg -- "snapshots" --> sc -- "semantic differences" --> rv
     sg["1. Snapshot generation"]
@@ -40,7 +31,7 @@ subgraph G[" "]
   sg -.-> opt
   sc -.-> simpll
   dfc -.-> fc
-end
+
 %% style
 classDef mono font-family:monospace
 class ma,dfc,fc,cc,clang,opt mono
@@ -87,8 +78,6 @@ The snapshot generation phase consists of the following steps:
 # This code renders an image, that does not show on the GitHub app, use a browser
 # to see the image.
 title: Classes involved in snapshot generation
-config:
-  theme: neutral
 ---
 classDiagram
   direction LR
@@ -239,8 +228,6 @@ WIP
 # This code renders an image, which does not show on the GitHub app, use a browser
 # to see the image.
 title: Classes used for caching of comparison results
-config:
-  theme: neutral
 ---
 classDiagram
   direction TB
@@ -278,8 +265,6 @@ classDiagram
 # This code renders an image, which does not show on the GitHub app, use a browser
 # to see the image.
 title: Classes used for creating results
-config:
-  theme: neutral
 ---
 classDiagram
   direction TB
@@ -304,7 +289,6 @@ classDiagram
 # to see the image.
 title: Classes used for creating results
 config:
-  theme: neutral
   mirrorActors: false
 ---
 sequenceDiagram
