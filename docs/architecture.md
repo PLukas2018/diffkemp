@@ -60,31 +60,33 @@ DiffKemp runs in phases, in which the different parts of DiffKemp play their rol
    - The source code of analysed project is compiled into LLVM IR using the `clang` compiler.
    - After compilation, optimisation passes are run (using `opt`) to simplify the LLVM IR.
    - The compiled project is saved to a directory, which we call **snapshot**.
-2. **Snapshot comparison**:
+2. [**Snapshot comparison**](#snapshot-comparison):
    - Two snapshots (corresponding to different versions of the analysed project) are compared using the SimpLL library.
    - For each snapshot, the library simplifies (by applying multiple code transformations) and analyses the LLVM files/modules in which are located definitions of the analysed symbols. This is done using the `ModuleAnalysis` class.
    - The core comparison is handled by the `DifferentialFunctionComparator` class, which extends LLVM's [`FunctionComparator`](https://llvm.org/doxygen/classllvm_1_1FunctionComparator.html) class.
      The `FunctionComparator` class handles instruction-by-instruction comparison. DiffKemp extends this functionality by handling semantics-preserving changes (implemented as **built-in patterns**), enabling it to manage more  complex changes/refactorings.
    - Additional **(custom) patterns** can be specified manually and passed to the comparison phase. These patterns are used if both the instruction-by-instruction comparison and the built-in patterns fail to detect semantic equality. In such cases, the `DifferentialFunctionComparator` uses the `CustomPatternComparator` class to attempt to match the changes against the provided patterns.
    - The results of the comparison of individual symbols are aggregated, and the found differences are reported to the user.
-3. **Result visualisation**:
+3. [**Result visualisation**](#result-visualisation):
    - The result viewer enables the user to interactively explore the found differences (the analysed symbols that were evaluated as semantically non-equal). It shows the relation between the analysed symbols and the location causing the semantic non-equality, allowing the user to display the source code of the analysed project versions with highlighted syntactic differences that are likely causing the semantic non-equality.
 
 ## 1. Snapshot generation
 
-The phase consists of:
+The snapshot generation phase consists of the following steps:
 
-  1. **Finding source files** which contains definitions of symbols specified by the user.
-  2. **Compilation of the source files to LLVM IR** for which we are using `clang` compiler using `clang -S -emit-llvm ...` command which compiles the source file to human readable LLVM IR. We are also running on the LLVM modules some optimisation passes using the `opt` utility to make the comparison easier (`dce` - dead code elimination, `simplifycfg` - simplifying control flow graph, ...).
-  3. **Creating a snapshot** and saving it to specified directory. 
-
-Implementation is divided into multiple classes:
+  1. **Identifying relevant source files**:
+     - Determine which parts of the project's code need to be compared. This typically means finding source files that contain definitions of the compared symbols specified by the user.
+  2. **Compiling source files to LLVM IR**:
+     - The identified source files are compiled into LLVM modules containing human-readable LLVM IR using the `clang` compiler with the command `clang -S -emit-llvm ...`.
+     - To make the oncoming comparison easier, several optimisation passes (`dce` - dead code elimination, `simplifycfg` - simplifying control flow graph, ...) are run on the compiled LLVM modules. The passes are run using the `opt` utility.
+  3. **Creating and saving a snapshot**:
+     - A snapshot, representing one version of the program prepared for comparison, is created from the compiled files and saved in the specified directory. 
 
 ```mermaid
 ---
 # This code renders an image, that does not show on the GitHub app, use a browser
 # to see the image.
-title: Classes used for building of snapshots
+title: Classes involved in snapshot generation
 config:
   theme: neutral
 ---
@@ -101,31 +103,38 @@ classDiagram
   <<abstract>> LlvmSourceFinder
 ```
 
-- [`LlvmSourceFinder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/llvm_source_finder.py) is an abstract class with a concrete implementation based on the used command. The class is responsible for finding LLVM modules (source files) containing specific symbol/function, and for some commands it also handles firstly finding neccessry C source files and its compilation to LLVM IR.
-- [`SourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/source_tree.py) class represents the source tree of analysed project, it wraps the `LlvmSourceFinder` class and provides its functionality - providing necessary LLVM module files, the derived class [`KernelSourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/kernel_source_tree.py) extend it the support by enabling to get modules containing definitions of sysctl options or kernel modules.
-- [`Snapshot`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/snapshot.py) class used for representing snapshot. Snapshot represents one version of the program and contains
-  - Relevant C source files (containing definitions of compared symbols and symbols used by them) which are used for displaying differences in the code after comparison).
-  - The C files compiled to LLVM IR, which are used for the comparison itself.
-  - Metadata file `snapshot.yaml` which looks like this
-    ```yaml
-    # For more details look at the implementation
-    - created_time: Date and time of snapshot creation # YYYY-MM-DD hh:mm:ss.sTZ                         
-      diffkemp_version: x.y.z                                           
-      list: # List of compared symbols (functions or sysctl options) and its metadata
-      # In cases of function comparison contains only the inner `functions` list
-      - functions:                                                           
-        - glob_var: null # For sysctl name of global variable whose usage is analysed within the function.                                                       
-          name: Name of function                                                                
-          llvm: Relative path to module containing the function                                                                
-          tag: null # In case of sysctl 'proc handler function' or 'using data variable "..."'
-        # Only for sysctl
-        sysctl: Sysctl option name                                                                   
-      list_kind: Type of comparison function/sysctl                                                           
-      llvm_source_finder:                                                           
-        kind: Used LlvmSourceFinder class                                                        
-      llvm_version: XX                                                              
-      source_dir: Absolute path to source directory of the project
-    ```
+Classes involved in snapshot generation:
+- [`LlvmSourceFinder`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/llvm_source_finder.py):
+  - An abstract class with a concrete implementation based on the command used for snapshot generation.
+  - It is responsible for finding LLVM modules containing specific symbol. For some commands, it also handles finding necessary project source files and their compilation to LLVM IR.
+- [`SourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/source_tree.py):
+  - Represents the source tree of analysed project.
+  - This class wraps the `LlvmSourceFinder` class and provides its functionality.
+  - The derived class, [`KernelSourceTree`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/llvm_ir/kernel_source_tree.py), extends its functionality by enabling to retrieve modules containing definitions of sysctl options and kernel modules.
+- [`Snapshot`](https://github.com/diffkemp/diffkemp/blob/master/diffkemp/snapshot.py)
+  - Represents the snapshot, which contains:
+    - Relevant source files, including those containing definitions of the compared symbols.
+    - The source files compiled to LLVM IR, which are used for the actual comparison.
+    - Metadata, saved in the snapshot directory as a `snapshot.yaml` file with the following structure:
+      ```yaml
+      # For more details look at the implementation
+      - created_time: Date and time of snapshot creation # YYYY-MM-DD hh:mm:ss.sTZ                         
+        diffkemp_version: x.y.z                                           
+        list: # List of compared symbols (functions or sysctl options) and its metadata
+        # In cases of function comparison contains directly the list from the `functions` field`.
+        - functions:                                                           
+          - glob_var: null # Name of the global variable whose usage is analysed within the function (only for sysctl).
+            name: Name of function
+            llvm: Relative path to module containing the function
+            tag: null # Only for sysctl, describes if the function is proc handler or uses the sysctl data variable.
+          # Only for sysctl
+          sysctl: Sysctl option name
+        list_kind: Type of comparison function/sysctl                                                           
+        llvm_source_finder:                                                           
+          kind: Used LlvmSourceFinder class                                                        
+        llvm_version: XX                                                              
+        source_dir: Absolute path to source directory of the project
+      ```
 
 ### `build-kernel`
 
