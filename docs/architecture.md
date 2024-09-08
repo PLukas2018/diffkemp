@@ -437,15 +437,27 @@ Source files are located in `diffkemp/simpll` directory.
 
 ## 3. Result visualisation
 
-TODO
+```mermaid
+flowchart TD
+    App --> ResultViewer
+    ResultViewer --> ResultNavigation
+    ResultViewer --> FunctionListing
+    ResultViewer --> Difference
+    Difference --> Callstack
+    Difference --> Code
+    Code --> DiffViewWrapper
+```
 
-  - `view` - commands, run web app created in React, which consists of components
-    - `App`
-      - `ResultViewer`
-        - `ResultNavigation`
-        - `NavigationArrows`
-      - `Difference`
-        - `Callstack`
-        - `Code`
-          - `DiffViewWrapper`
-      - `FunctionListing`
+     
+// - `App`
+//   - `ResultViewer`: Visualisation of found semantic differences.
+//     - `ResultNavigation`: Navigation between results (differences).
+//       - `NavigationArrows`: Arrows for navigating in results.
+//     - `FunctionListing`: Listing of compared/differing functions.
+//     - `Difference`: Visualisation of selected difference
+//                     (defined by compared and differing function).
+//       - `Callstack`: Visualisation of call stack for the selected difference.
+//       - `Code`: Preparation of code (fetching necessary files)
+//                 for selected function from call stack.
+//         - `DiffViewWrapper`: The visualisation of the selected function
+//                              made possible by react-diff-view package.
