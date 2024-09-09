@@ -18,30 +18,6 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        llvm: [9, 10, 11, 12, 13, 14, 15, 16, 17]
-        env:
-          - CC: gcc-9
-            CXX: g++-9
-        asan: [OFF]
-        regression-tests: [true]
-
-        include:
-          - llvm: 17
-            env:
-              CC: clang
-              CXX: clang++
-            asan: OFF
-            regression-tests: true
-
-          - llvm: 17
-            env:
-              CC: gcc-9
-              CXX: g++-9
-            asan: ON
-            regression-tests: false
-
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v10
@@ -56,62 +32,40 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /opt/hostedtoolcache/CodeQL
 
-      - name: Restore Test Data
-        uses: actions/cache/restore@v4
-        id: cache-test-data
-        if: matrix.regression-tests
-        with:
-          path: tests/regression/test_data
-          key: test-data-llvm${{ matrix.llvm }}-${{ hashFiles('tests/regression/test_specs/*') }}
-
-      # Download kernel sources:
-      # - if test_data is cached, we only need the kernel for unit tests
-      # - if test_data is not cached, we need all kernels
       - name: Download Kernel for Unit Tests
-        if: |
-          matrix.regression-tests &&
-          steps.cache-test-data.outputs.cache-hit == 'true'
         run:
           nix develop .#test-kernel-buildenv --command bash -c \
-            "rhel-kernel-get 3.10.0-957.el7 --output-dir kernel"
-      - name: Download Kernels
-        if: |
-          matrix.regression-tests &&
-          steps.cache-test-data.outputs.cache-hit != 'true'
-        run: |
-          mkdir kernel
-          for k in $KERNELS; do
-            nix develop .#test-kernel-buildenv --command bash -c \
-              "rhel-kernel-get $k --output-dir kernel"
-          done
+            "echo D80 &&
+             time rhel-kernel-get 4.18.0-80.el8 --output-dir kernel --kabi &&
+             echo SIZE80 &&
+             du -hs kernel/linux-4.18.0-80.el8/ &&
+             echo D147 &&
+             time rhel-kernel-get 4.18.0-147.el8 --output-dir kernel --kabi &&
+             echo SIZE147 &&
+             du -hs kernel/linux-4.18.0-80.el8/ "
 
       - name: Prepare Build Environment
         run: |
           mkdir -p ${{ github.workspace }}/build
 
       - name: Configure and Build
-        env: ${{ matrix.env }}
         run: >
-          nix develop .#diffkemp-llvm${{ matrix.llvm }} --command bash -c
-          "cmake -B build ${{ github.workspace }} -GNinja -DSANITIZE_ADDRESS=${{ matrix.asan }} &&
+          nix develop .#diffkemp-llvm17 --command bash -c
+          "cmake -B build ${{ github.workspace }} -GNinja &&
            ninja -C build"
 
-      - name: Run SimpLL Unit Tests
+      - name: Run snapshot generation and comparison
         run: >
-          nix develop .#diffkemp-llvm${{ matrix.llvm }} --command
-          ninja test -C build
-
-      - name: Run Tests
-        if: matrix.regression-tests
-        shell: bash
-        run: >
-          nix develop .#diffkemp-llvm${{ matrix.llvm }} --command bash -c
+          nix develop .#diffkemp-llvm17 --command bash -c
           "setuptoolsShellHook &&
-           pytest tests -v"
-
-      - name: Cache Test Data
-        if: matrix.regression-tests
-        uses: actions/cache@v4
-        with:
-          path: tests/regression/test_data
-          key: test-data-llvm${{ matrix.llvm }}-${{ hashFiles('tests/regression/test_specs/*') }}
+           mkdir -p snapshots &&
+           echo 'SG 80' &&
+           time bin/diffkemp build-kernel kernel/linux-4.18.0-80.el8/ snapshots/linux-4.18.0-80.el8 kernel/linux-4.18.0-80.el8/kabi_whitelist_x86_64 &&
+           echo SIZE80 &&
+           du -hs snapshots/linux-4.18.0-80.el8/ &&
+           echo 'SG 147' &&
+           time bin/diffkemp build-kernel kernel/linux-4.18.0-147.el8/ snapshots/linux-4.18.0-147.el8 kernel/linux-4.18.0-147.el8/kabi_whitelist_x86_64 &&
+           echo SIZE147 &&
+           du -hs snapshots/linux-4.18.0-80.el8/ &&
+           echo 'SC 80-147' &&
+           time bin/diffkemp compare snapshots/linux-4.18.0-80.el8 snapshots/linux-4.18.0-147.el8/ "
