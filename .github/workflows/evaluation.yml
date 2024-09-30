@@ -1,0 +1,25 @@
+on:
+  issue_comment:
+    type: created
+jobs:
+  eqbench:
+    if: ${{ github.event.issue.pull_request }}
+    permissions:
+      issues: write
+      pull-requests: write
+    runs-on:  ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v10
+      - run: ./${{ github.workspace }}/.github/workflows/eqbench-evaluation.py ${{ github.repository }} ${{ github.ref }} >> $GITHUB_STEP_SUMMARY
+      - run: output=`cat $GITHUB_STEP_SUMMARY`
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            output = process.env.result
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Test'
+            })
