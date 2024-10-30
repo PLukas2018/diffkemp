@@ -29,6 +29,7 @@ def get_root_dir(path, is_develop_build):
     return os.path.abspath(f"{path}/../..")
 
 
+print(os.environ["PATH"])
 ffibuilder = FFI()
 location = os.path.dirname(os.path.abspath(__file__))
 root_dir = get_root_dir(location, is_develop_build=(len(sys.argv) == 1))
