@@ -1,6 +1,6 @@
 ![Build](https://github.com/viktormalik/diffkemp/actions/workflows/ci.yml/badge.svg?branch=master)
 
-# DiffKemp
+# DiffKemp 
 
 DiffKemp is a framework for automatic static analysis of semantic differences
 between different versions of projects written in C, with main focus on the
