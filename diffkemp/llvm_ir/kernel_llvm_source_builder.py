@@ -504,7 +504,7 @@ class KernelLlvmSourceBuilder(LlvmSourceFinder):
             try:
                 output = check_output(
                     ["make", "V=1",
-                     "CFLAGS=-w", "EXTRA_CFLAGS=-w",
+                     "EXTRA_CFLAGS=-w",
                      object_file,
                      "--just-print"], stderr=stderr).decode("utf-8")
             except CalledProcessError:
