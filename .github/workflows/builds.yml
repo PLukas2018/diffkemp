@@ -43,21 +43,26 @@ jobs:
       - name: Release build and install of DiffKemp
         if: ${{ matrix.build-type == 'release' }}
         run: |
-          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_VIEWER=On
           sudo ninja -C build install
           pip install .
           sudo install -m 0755 bin/diffkemp /usr/bin/diffkemp
       - name: Development build of DiffKemp
         if: ${{ matrix.build-type == 'development' }}
         run: |
-          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Debug -DBUILD_VIEWER=On
           sudo ninja -C build
           pip install -e .
-      - name: Check by building and comparing make-based project
+      - name: Check by building make-based project
         run: |
           ${{matrix.diffkemp-bin}} build tests/testing_projects/make_based/ old-snapshot
           ${{matrix.diffkemp-bin}} build tests/testing_projects/make_based/ new-snapshot
-          ${{matrix.diffkemp-bin}} compare old-snapshot new-snapshot
+      - name: Check by comparing make-based project
+        run: ${{matrix.diffkemp-bin}} compare old-snapshot new-snapshot -o diff
+      - name: Check by running development version of viewer
+        run: ${{matrix.diffkemp-bin}} view --devel diff
+      - name: Check by running release version of viewer
+        run: ${{matrix.diffkemp-bin}} view diff
 
   nix-development-build:
     runs-on: ubuntu-latest
