@@ -2,42 +2,55 @@
 
 ```mermaid
 ---
-# This code renders an image, that does not show on the GitHub app, use
-# a browser to see the image.
-title: Simplified DiffKemp architecture
+title: Simplified DiffKemp Architecture
+config:
+  theme: base
+  themeVariables:
+    nodeBorder: black
+    mainBkg: white
+    clusterBkg: white
+    clusterBorder: black
+    edgeLabelBackground: lightgrey
 ---
 flowchart LR
-  old --> b1
-  sl["symbol list"] --> b1 & b2
-  new --> b2
-  subgraph sg["Snapshot generator"]
-    b1["Builder<br/>(clang -emit-llvm)"]
-    b2["Builder<br/>(clang -emit-llvm)"]
-    opt1["Opt"]
-    opt2["Opt"]
-    b1 --> opt1
-    b2 --> opt2
-  end
-  opt1 --> p1
-  opt2 --> p2
-  subgraph sc["Snapshot comparison"]
-    p1[Passes]
-    p2[Passes]
-    p1 & p2 --> Comparator
-    subgraph Comparator
-      bp[built-in patterns]
-    end
-    Comparator --> ra[Result agregation] 
-  end
-  ra --> equal
-  ra --- rfnes[report for not equal symbols]
-  rfnes --> ne[not equal]  
-  cp[custom patterns] --> Comparator
-  rfnes --> rv[Result viewer]
+  direction LR
+  %% Input source
+  old["old<br/>project<br/>version"]:::noBorder --> b1
+  sl["symbol<br/>list"]:::noBorder --> b1 & b2
+  new["new<br/>project<br/>version"]:::noBorder --> b2
 
-%% style
-classDef mono font-family:monospace
-class ma,dfc,fc,cc,clang,opt mono
+  %% Snapshot Generator
+  subgraph sg["Snapshot generator"]
+    b1("Builder")
+    b2("Builder")
+  end
+
+  %% Snapshot Comparison
+  b1 --"old<br/>snapshot"---> sc
+  b2 --"new<br/>snapshot"---> sc
+  subgraph sc["Snapshot comparator"]
+    s1["old<br/>function"]:::noBorder
+    s2["new<br/>function"]:::noBorder
+
+    s1 --"LLVM IR"--> core
+    s2 --"LLVM IR"--> core
+
+    subgraph core["Comparator core"]
+      bp["built-in<br/>patterns"]
+    end
+    core --> eq(✓):::coreResultEQ
+    core --> neq(✗):::coreResultNEQ 
+  end
+  cp["custom patterns"]:::noBorder ---> core
+
+  sc --"report"---->rv("Result<br/>viewer")
+  sc ~~~ tmp1:::invisible
+  sc ~~~ tmp2:::invisible
+  sc ~~~ tmp3:::invisible
+  classDef noBorder stroke:white;
+  classDef coreResultNEQ font-size:25px,stroke:white,color:darkred;
+  classDef coreResultEQ font-size:25px,stroke:white,color:darkgreen;
+  classDef invisible display:none;
 ```
 
 DiffKemp consists of several components:
